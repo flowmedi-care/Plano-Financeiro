@@ -9,6 +9,18 @@ App de planejamento financeiro com importação de faturas Nubank (CSV) e Itaú 
 - shadcn/ui + Recharts
 - PapaParse (CSV) + pdf-parse (PDF)
 
+## Deploy na Vercel
+
+1. Importe o repositório na [Vercel](https://vercel.com)
+2. **Framework Preset:** Next.js (detectado automaticamente via `vercel.json`)
+3. **Output Directory:** deixe em branco — não use `public`
+4. Adicione as variáveis de ambiente:
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+5. Faça o deploy
+
+Se aparecer o erro *"No Output Directory named public"*, vá em **Project Settings → Build & Development Settings** e limpe o campo **Output Directory**.
+
 ## Setup
 
 1. Crie um projeto no [Supabase](https://supabase.com)
