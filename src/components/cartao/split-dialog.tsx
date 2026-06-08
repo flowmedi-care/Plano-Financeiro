@@ -3,7 +3,12 @@
 import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { assignSplits, clearSplits } from "@/lib/actions/splits";
-import { splitEqually, splitFull, validateSplits } from "@/lib/splits/calculate";
+import {
+  selfShareCents,
+  splitEquallyAmongOthers,
+  splitFull,
+  validateSplits,
+} from "@/lib/splits/calculate";
 import type { Person, Transaction } from "@/types/database";
 import { formatCurrency } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -42,6 +47,7 @@ export function SplitDialog({
   const [fullPersonId, setFullPersonId] = useState(people[0]?.id ?? "");
   const [equalPersonIds, setEqualPersonIds] = useState<string[]>([]);
   const [customAmounts, setCustomAmounts] = useState<Record<string, string>>({});
+  const [remember, setRemember] = useState(true);
   const [pending, startTransition] = useTransition();
 
   const singleTx = transactions.length === 1 ? transactions[0] : null;
@@ -56,7 +62,7 @@ export function SplitDialog({
       return [{ personId: fullPersonId, amountCents: totalCents }];
     }
     if (mode === "equal" && equalPersonIds.length > 0 && singleTx) {
-      return splitEqually(singleTx.amount_cents, equalPersonIds);
+      return splitEquallyAmongOthers(singleTx.amount_cents, equalPersonIds);
     }
     if (mode === "custom" && singleTx) {
       return people
@@ -70,10 +76,38 @@ export function SplitDialog({
     return [];
   }, [mode, fullPersonId, equalPersonIds, customAmounts, singleTx, transactions.length, totalCents, people]);
 
+  const selfShare = singleTx ? selfShareCents(singleTx.amount_cents, preview) : null;
+
   function toggleEqualPerson(personId: string, checked: boolean) {
     setEqualPersonIds((prev) =>
       checked ? [...prev, personId] : prev.filter((id) => id !== personId)
     );
+  }
+
+  function buildRememberParams() {
+    if (!singleTx || !remember || mode === "custom" || mode === "none") return {};
+
+    if (mode === "full" && fullPersonId) {
+      return {
+        remember: true,
+        splitMode: "full" as const,
+        personIds: [fullPersonId],
+        merchantKey: singleTx.merchant_key,
+        accountId: singleTx.account_id,
+      };
+    }
+
+    if (mode === "equal" && equalPersonIds.length > 0) {
+      return {
+        remember: true,
+        splitMode: "equal" as const,
+        personIds: equalPersonIds,
+        merchantKey: singleTx.merchant_key,
+        accountId: singleTx.account_id,
+      };
+    }
+
+    return {};
   }
 
   function handleSave() {
@@ -110,7 +144,7 @@ export function SplitDialog({
             for (const tx of transactions) {
               await assignSplits({
                 transactionIds: [tx.id],
-                splits: splitEqually(tx.amount_cents, equalPersonIds),
+                splits: splitEquallyAmongOthers(tx.amount_cents, equalPersonIds),
               });
             }
           }
@@ -131,10 +165,14 @@ export function SplitDialog({
         if (mode === "full" && fullPersonId) {
           splits = splitFull(fullPersonId, singleTx.amount_cents);
         } else if (mode === "equal" && equalPersonIds.length > 0) {
-          splits = splitEqually(singleTx.amount_cents, equalPersonIds);
+          splits = splitEquallyAmongOthers(singleTx.amount_cents, equalPersonIds);
         }
 
-        await assignSplits({ transactionIds: [singleTx.id], splits });
+        await assignSplits({
+          transactionIds: [singleTx.id],
+          splits,
+          ...buildRememberParams(),
+        });
         toast.success("Reembolso atribuído");
         onOpenChange(false);
       } catch (error) {
@@ -157,6 +195,8 @@ export function SplitDialog({
       </Dialog>
     );
   }
+
+  const canRemember = singleTx && (mode === "full" || mode === "equal");
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -210,7 +250,7 @@ export function SplitDialog({
 
           {mode === "equal" ? (
             <div className="space-y-2">
-              <Label>Dividir entre</Label>
+              <Label>Dividir com (você entra automaticamente)</Label>
               {people.map((person) => (
                 <div key={person.id} className="flex items-center gap-2">
                   <Checkbox
@@ -246,7 +286,7 @@ export function SplitDialog({
             </div>
           ) : null}
 
-          {preview.length > 0 ? (
+          {preview.length > 0 || (mode === "equal" && selfShare !== null && selfShare > 0) ? (
             <div className="rounded-md bg-muted/50 p-3 text-sm">
               <p className="font-medium">Preview</p>
               {preview.map((split) => {
@@ -257,6 +297,20 @@ export function SplitDialog({
                   </p>
                 );
               })}
+              {mode === "equal" && selfShare !== null && selfShare > 0 ? (
+                <p>Você: {formatCurrency(selfShare)}</p>
+              ) : null}
+            </div>
+          ) : null}
+
+          {canRemember ? (
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="remember-split"
+                checked={remember}
+                onCheckedChange={(checked) => setRemember(Boolean(checked))}
+              />
+              <Label htmlFor="remember-split">Lembrar para este estabelecimento</Label>
             </div>
           ) : null}
 

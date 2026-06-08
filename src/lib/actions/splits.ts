@@ -4,19 +4,30 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveScope } from "@/lib/scope";
 import { getProfile } from "@/lib/actions/profile";
-import { validateSplits, type SplitInput } from "@/lib/splits/calculate";
+import {
+  validateSplits,
+  type SplitInput,
+} from "@/lib/splits/calculate";
+import type { SplitMode } from "@/types/database";
 
 export async function assignSplits(params: {
   transactionIds: string[];
   splits: SplitInput[];
+  remember?: boolean;
+  splitMode?: SplitMode;
+  personIds?: string[];
+  merchantKey?: string;
+  accountId?: string;
 }) {
   const supabase = await createClient();
   const profile = await getProfile();
   if (!profile) throw new Error("Não autenticado");
 
+  const { scope, householdId } = getActiveScope(profile);
+
   const { data: transactions } = await supabase
     .from("transactions")
-    .select("id, amount_cents")
+    .select("id, amount_cents, merchant_key, account_id")
     .in("id", params.transactionIds);
 
   if (!transactions?.length) throw new Error("Transações não encontradas");
@@ -46,6 +57,59 @@ export async function assignSplits(params: {
     if (error) throw new Error(error.message);
   }
 
+  if (
+    params.remember &&
+    params.splitMode &&
+    params.personIds &&
+    params.personIds.length > 0 &&
+    transactions.length === 1
+  ) {
+    const tx = transactions[0];
+    const merchantKey = params.merchantKey ?? tx.merchant_key;
+    const accountId = params.accountId ?? tx.account_id;
+
+    let ruleQuery = supabase
+      .from("merchant_split_rules")
+      .select("id")
+      .eq("merchant_key", merchantKey)
+      .eq("scope", scope);
+
+    if (scope === "household" && householdId) {
+      ruleQuery = ruleQuery.eq("household_id", householdId);
+    } else {
+      ruleQuery = ruleQuery.eq("user_id", profile.id);
+    }
+
+    if (accountId) {
+      ruleQuery = ruleQuery.eq("account_id", accountId);
+    } else {
+      ruleQuery = ruleQuery.is("account_id", null);
+    }
+
+    const { data: existingRule } = await ruleQuery.maybeSingle();
+
+    const rulePayload = {
+      split_mode: params.splitMode,
+      person_ids: params.personIds,
+    };
+
+    if (existingRule) {
+      await supabase
+        .from("merchant_split_rules")
+        .update(rulePayload)
+        .eq("id", existingRule.id);
+    } else {
+      await supabase.from("merchant_split_rules").insert({
+        user_id: profile.id,
+        household_id: scope === "household" ? householdId : null,
+        scope,
+        account_id: accountId,
+        merchant_key: merchantKey,
+        ...rulePayload,
+      });
+    }
+  }
+
   revalidatePath("/cartao/transacoes");
   revalidatePath("/");
 }
@@ -71,7 +135,7 @@ export async function getAmountsOwedByPerson(referenceMonth?: string) {
 
   let txQuery = supabase
     .from("transactions")
-    .select("id, transaction_date")
+    .select("id")
     .eq("is_payment", false);
 
   if (scope === "household" && householdId) {
@@ -86,7 +150,9 @@ export async function getAmountsOwedByPerson(referenceMonth?: string) {
     const endMonth = month === 12 ? 1 : month + 1;
     const endYear = month === 12 ? year + 1 : year;
     const end = `${endYear}-${String(endMonth).padStart(2, "0")}-01`;
-    txQuery = txQuery.gte("transaction_date", start).lt("transaction_date", end);
+    txQuery = txQuery.or(
+      `reference_month.eq.${referenceMonth},and(reference_month.is.null,transaction_date.gte.${start},transaction_date.lt.${end})`
+    );
   }
 
   const { data: transactions } = await txQuery;

@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { splitEqually, splitFull, validateSplits } from "@/lib/splits/calculate";
+import {
+  selfShareCents,
+  splitEqually,
+  splitEquallyAmongOthers,
+  splitFull,
+  splitsFromRule,
+  validateSplits,
+} from "@/lib/splits/calculate";
 
 describe("splitEqually", () => {
   it("divides equally with odd cents", () => {
@@ -15,6 +22,41 @@ describe("splitEqually", () => {
     const sum = result.reduce((s, r) => s + r.amountCents, 0);
     expect(sum).toBe(100);
     expect(result).toHaveLength(3);
+  });
+});
+
+describe("splitEquallyAmongOthers", () => {
+  it("splits 50/50 when one other person is selected", () => {
+    const result = splitEquallyAmongOthers(100, ["namorada"]);
+    expect(result).toEqual([{ personId: "namorada", amountCents: 50 }]);
+    expect(selfShareCents(100, result)).toBe(50);
+  });
+
+  it("splits among two others plus self", () => {
+    const result = splitEquallyAmongOthers(100, ["pai", "namorada"]);
+    const sum = result.reduce((s, r) => s + r.amountCents, 0);
+    expect(sum).toBe(67);
+    expect(selfShareCents(100, result)).toBe(33);
+    expect(result).toHaveLength(2);
+  });
+
+  it("handles odd cents with one other person", () => {
+    const result = splitEquallyAmongOthers(10001, ["namorada"]);
+    expect(result).toEqual([{ personId: "namorada", amountCents: 5001 }]);
+    expect(selfShareCents(10001, result)).toBe(5000);
+  });
+});
+
+describe("splitsFromRule", () => {
+  it("applies full rule", () => {
+    expect(splitsFromRule(9000, "full", ["pai"])).toEqual([
+      { personId: "pai", amountCents: 9000 },
+    ]);
+  });
+
+  it("applies equal rule including self", () => {
+    const result = splitsFromRule(100, "equal", ["namorada"]);
+    expect(result).toEqual([{ personId: "namorada", amountCents: 50 }]);
   });
 });
 

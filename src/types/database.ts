@@ -100,6 +100,20 @@ export interface MerchantRule {
   created_at: string;
 }
 
+export type SplitMode = "full" | "equal";
+
+export interface MerchantSplitRule {
+  id: string;
+  user_id: string;
+  household_id: string | null;
+  scope: ScopeType;
+  account_id: string | null;
+  merchant_key: string;
+  split_mode: SplitMode;
+  person_ids: string[];
+  created_at: string;
+}
+
 export interface StatementImport {
   id: string;
   user_id: string;
@@ -123,6 +137,7 @@ export interface Transaction {
   account_id: string;
   card_id: string | null;
   import_id: string | null;
+  reference_month: string | null;
   transaction_date: string;
   description: string;
   merchant_key: string;

@@ -4,6 +4,8 @@ import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { classifyTransactions } from "@/lib/actions/transactions";
 import { SplitDialog } from "@/components/cartao/split-dialog";
+import { TransactionSummary } from "@/components/cartao/transaction-summary";
+import { getTransactionReferenceMonth } from "@/lib/transactions/summary";
 import type { Account, Card as CreditCard, Category, Person, Transaction } from "@/types/database";
 import { formatCurrency } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -27,6 +29,13 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 
+function getLatestReferenceMonth(transactions: Transaction[]): string {
+  const months = [
+    ...new Set(transactions.map((tx) => getTransactionReferenceMonth(tx))),
+  ].sort().reverse();
+  return months[0] ?? "all";
+}
+
 export function TransactionTable({
   transactions,
   categories,
@@ -46,13 +55,16 @@ export function TransactionTable({
   const [remember, setRemember] = useState(true);
   const [accountFilter, setAccountFilter] = useState("all");
   const [cardFilter, setCardFilter] = useState("all");
-  const [monthFilter, setMonthFilter] = useState("all");
+  const [monthFilter, setMonthFilter] = useState(() =>
+    getLatestReferenceMonth(transactions)
+  );
+  const [personFilter, setPersonFilter] = useState("all");
   const [uncategorizedOnly, setUncategorizedOnly] = useState(false);
   const [pending, startTransition] = useTransition();
 
   const months = useMemo(() => {
     const set = new Set(
-      transactions.map((tx) => tx.transaction_date.slice(0, 7))
+      transactions.map((tx) => getTransactionReferenceMonth(tx))
     );
     return Array.from(set).sort().reverse();
   }, [transactions]);
@@ -61,11 +73,31 @@ export function TransactionTable({
     return transactions.filter((tx) => {
       if (accountFilter !== "all" && tx.account_id !== accountFilter) return false;
       if (cardFilter !== "all" && tx.card_id !== cardFilter) return false;
-      if (monthFilter !== "all" && !tx.transaction_date.startsWith(monthFilter)) return false;
+      if (
+        monthFilter !== "all" &&
+        getTransactionReferenceMonth(tx) !== monthFilter
+      ) {
+        return false;
+      }
+      if (personFilter === "me" && (tx.splits?.length ?? 0) > 0) return false;
+      if (
+        personFilter !== "all" &&
+        personFilter !== "me" &&
+        !tx.splits?.some((s) => s.person_id === personFilter)
+      ) {
+        return false;
+      }
       if (uncategorizedOnly && tx.category_id) return false;
       return true;
     });
-  }, [transactions, accountFilter, cardFilter, monthFilter, uncategorizedOnly]);
+  }, [
+    transactions,
+    accountFilter,
+    cardFilter,
+    monthFilter,
+    personFilter,
+    uncategorizedOnly,
+  ]);
 
   function toggleAll(checked: boolean) {
     setSelected(checked ? filtered.map((tx) => tx.id) : []);
@@ -102,7 +134,7 @@ export function TransactionTable({
         <CardHeader>
           <CardTitle>Filtros</CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-5">
+        <CardContent className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
           <div className="space-y-2">
             <Label>Conta</Label>
             <Select value={accountFilter} onValueChange={setAccountFilter}>
@@ -137,7 +169,7 @@ export function TransactionTable({
             </Select>
           </div>
           <div className="space-y-2">
-            <Label>Mês</Label>
+            <Label>Mês da fatura</Label>
             <Select value={monthFilter} onValueChange={setMonthFilter}>
               <SelectTrigger>
                 <SelectValue />
@@ -147,6 +179,23 @@ export function TransactionTable({
                 {months.map((month) => (
                   <SelectItem key={month} value={month}>
                     {month}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Pessoa</Label>
+            <Select value={personFilter} onValueChange={setPersonFilter}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas</SelectItem>
+                <SelectItem value="me">Só eu</SelectItem>
+                {people.map((person) => (
+                  <SelectItem key={person.id} value={person.id}>
+                    {person.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -287,6 +336,12 @@ export function TransactionTable({
           </Table>
         </CardContent>
       </Card>
+
+      <TransactionSummary
+        transactions={filtered}
+        people={people}
+        monthFilter={monthFilter}
+      />
     </div>
   );
 }

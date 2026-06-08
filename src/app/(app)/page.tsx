@@ -55,7 +55,7 @@ export default async function DashboardPage() {
       <div>
         <h1 className="text-2xl font-bold">Dashboard</h1>
         <p className="text-muted-foreground">
-          Visão geral do mês {referenceMonth}
+          Visão geral da fatura {referenceMonth}
         </p>
       </div>
 

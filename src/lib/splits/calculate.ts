@@ -18,6 +18,38 @@ export function splitEqually(
   }));
 }
 
+/** Divide entre você + outras pessoas; retorna splits só para os outros. */
+export function splitEquallyAmongOthers(
+  totalCents: number,
+  otherPersonIds: string[]
+): SplitInput[] {
+  if (otherPersonIds.length === 0) return [];
+
+  const participants = otherPersonIds.length + 1;
+  const base = Math.floor(totalCents / participants);
+  const remainder = totalCents % participants;
+
+  return otherPersonIds.map((personId, index) => ({
+    personId,
+    amountCents: base + (index < remainder ? 1 : 0),
+  }));
+}
+
+export function selfShareCents(totalCents: number, splits: SplitInput[]): number {
+  const others = splits.reduce((sum, s) => sum + s.amountCents, 0);
+  return totalCents - others;
+}
+
+export function splitsFromRule(
+  amountCents: number,
+  mode: "full" | "equal",
+  personIds: string[]
+): SplitInput[] {
+  if (personIds.length === 0) return [];
+  if (mode === "full") return splitFull(personIds[0], amountCents);
+  return splitEquallyAmongOthers(amountCents, personIds);
+}
+
 export function splitFull(personId: string, totalCents: number): SplitInput[] {
   return [{ personId, amountCents: totalCents }];
 }

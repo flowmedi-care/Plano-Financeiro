@@ -38,7 +38,9 @@ export async function getTransactions(filters?: {
     const endMonth = month === 12 ? 1 : month + 1;
     const endYear = month === 12 ? year + 1 : year;
     const end = `${endYear}-${String(endMonth).padStart(2, "0")}-01`;
-    query = query.gte("transaction_date", start).lt("transaction_date", end);
+    query = query.or(
+      `reference_month.eq.${filters.referenceMonth},and(reference_month.is.null,transaction_date.gte.${start},transaction_date.lt.${end})`
+    );
   }
 
   if (filters?.uncategorizedOnly) {
