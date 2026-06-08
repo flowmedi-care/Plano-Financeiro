@@ -182,11 +182,62 @@ export interface BudgetFixedExpense {
   created_at: string;
 }
 
+export type CashFlowEntryType = "income" | "fixed_expense" | "card_installment" | "variable";
+export type CashFlowEntrySource = "manual" | "template" | "import" | "estimated";
+export type CashFlowTemplateType = "income" | "fixed_expense";
+export type EstimationMethod = "none" | "manual" | "historical_avg" | "surplus_allocation";
+
+export interface CashFlowTemplate {
+  id: string;
+  user_id: string;
+  household_id: string | null;
+  scope: ScopeType;
+  type: CashFlowTemplateType;
+  label: string;
+  amount_cents: number;
+  recurrence: "monthly" | "none";
+  day_of_month: number | null;
+  category_id: string | null;
+  account_id: string | null;
+  start_month: string | null;
+  end_month: string | null;
+  created_at: string;
+}
+
+export interface CashFlowEntry {
+  id: string;
+  budget_month_id: string;
+  template_id: string | null;
+  type: CashFlowEntryType;
+  label: string;
+  amount_cents: number | null;
+  category_id: string | null;
+  account_id: string | null;
+  source: CashFlowEntrySource;
+  is_confirmed: boolean;
+  created_at: string;
+  category?: Category | null;
+  account?: Account | null;
+}
+
+export interface CashFlowSettings {
+  id: string;
+  user_id: string;
+  household_id: string | null;
+  scope: ScopeType;
+  opening_balance_cents: number;
+  projection_months: number;
+  default_estimation_method: EstimationMethod;
+  created_at: string;
+}
+
 export interface BudgetVariableExpense {
   id: string;
   budget_month_id: string;
   category_id: string;
-  amount_cents: number;
+  amount_cents: number | null;
+  is_tracked: boolean;
+  estimation_method: EstimationMethod;
   created_at: string;
   category?: Category;
 }

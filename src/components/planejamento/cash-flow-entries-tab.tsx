@@ -1,0 +1,436 @@
+"use client";
+
+import { useState, useTransition } from "react";
+import { toast } from "sonner";
+import {
+  addCashFlowEntry,
+  deleteCashFlowEntry,
+  setVariableExpense,
+  setVariableTracked,
+  updateCashFlowSettings,
+} from "@/lib/actions/cash-flow";
+import { calculateBudgetSummary } from "@/lib/budget/calculations";
+import type {
+  Account,
+  CashFlowEntry,
+  CashFlowSettings,
+  Category,
+  BudgetVariableExpense,
+} from "@/types/database";
+import { formatCurrency } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+function parseMoneyToCents(value: string): number {
+  const normalized = value.replace(/\./g, "").replace(",", ".");
+  return Math.round(Number.parseFloat(normalized || "0") * 100);
+}
+
+export function CashFlowEntriesTab({
+  budgetMonthId,
+  entries,
+  variableExpenses,
+  categories,
+  accounts,
+  settings,
+  cardCents,
+}: {
+  budgetMonthId: string;
+  entries: CashFlowEntry[];
+  variableExpenses: BudgetVariableExpense[];
+  categories: Category[];
+  accounts: Account[];
+  settings: CashFlowSettings;
+  cardCents: number;
+}) {
+  const [pending, startTransition] = useTransition();
+  const [incomeLabel, setIncomeLabel] = useState("");
+  const [incomeAmount, setIncomeAmount] = useState("");
+  const [incomeRecurring, setIncomeRecurring] = useState(true);
+  const [fixedLabel, setFixedLabel] = useState("");
+  const [fixedAmount, setFixedAmount] = useState("");
+  const [fixedRecurring, setFixedRecurring] = useState(true);
+  const [cardLabel, setCardLabel] = useState("");
+  const [cardAmount, setCardAmount] = useState("");
+  const [cardAccountId, setCardAccountId] = useState(accounts[0]?.id ?? "");
+  const [openingBalance, setOpeningBalance] = useState(
+    (settings.opening_balance_cents / 100).toFixed(2)
+  );
+
+  const incomes = entries.filter((e) => e.type === "income");
+  const fixed = entries.filter((e) => e.type === "fixed_expense");
+  const manualCards = entries.filter((e) => e.type === "card_installment");
+
+  const summary = calculateBudgetSummary({
+    incomes,
+    fixedExpenses: fixed,
+    variableExpenses: variableExpenses.filter((v) => v.is_tracked),
+    cardCents,
+  });
+
+  function handleSaveOpeningBalance() {
+    startTransition(async () => {
+      try {
+        await updateCashFlowSettings({
+          openingBalanceCents: parseMoneyToCents(openingBalance),
+        });
+        toast.success("Saldo inicial atualizado");
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Erro");
+      }
+    });
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-4 md:grid-cols-5">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-muted-foreground">Receitas</CardTitle>
+          </CardHeader>
+          <CardContent className="text-2xl font-bold text-emerald-600">
+            {formatCurrency(summary.totalIncomeCents)}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-muted-foreground">Fixas</CardTitle>
+          </CardHeader>
+          <CardContent className="text-2xl font-bold">
+            {formatCurrency(summary.totalFixedCents)}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-muted-foreground">Cartão</CardTitle>
+          </CardHeader>
+          <CardContent className="text-2xl font-bold">
+            {formatCurrency(summary.totalCardCents)}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-muted-foreground">Variáveis</CardTitle>
+          </CardHeader>
+          <CardContent className="text-2xl font-bold">
+            {formatCurrency(summary.totalVariableCents)}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-muted-foreground">Saldo mês</CardTitle>
+          </CardHeader>
+          <CardContent
+            className={`text-2xl font-bold ${
+              summary.projectedBalanceCents >= 0 ? "text-emerald-600" : "text-red-600"
+            }`}
+          >
+            {formatCurrency(summary.projectedBalanceCents)}
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Saldo inicial</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-end gap-4">
+          <div className="space-y-2">
+            <Label>Conta corrente (início da projeção)</Label>
+            <Input
+              className="w-[200px]"
+              value={openingBalance}
+              onChange={(e) => setOpeningBalance(e.target.value)}
+              placeholder="0,00"
+            />
+          </div>
+          <Button onClick={handleSaveOpeningBalance} disabled={pending}>
+            Salvar
+          </Button>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Receitas</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {incomes.map((item) => (
+              <div key={item.id} className="flex items-center justify-between">
+                <span>
+                  {item.label}
+                  {item.source === "template" ? (
+                    <span className="ml-2 text-xs text-muted-foreground">(recorrente)</span>
+                  ) : null}
+                </span>
+                <div className="flex items-center gap-2">
+                  <span>{formatCurrency(item.amount_cents ?? 0)}</span>
+                  {item.source !== "template" ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() =>
+                        startTransition(() => deleteCashFlowEntry(item.id))
+                      }
+                    >
+                      Remover
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            ))}
+            <div className="grid gap-2">
+              <div className="grid gap-2 md:grid-cols-3">
+                <Input
+                  placeholder="Ex: Salário"
+                  value={incomeLabel}
+                  onChange={(e) => setIncomeLabel(e.target.value)}
+                />
+                <Input
+                  placeholder="Valor"
+                  value={incomeAmount}
+                  onChange={(e) => setIncomeAmount(e.target.value)}
+                />
+                <Button
+                  disabled={pending}
+                  onClick={() =>
+                    startTransition(async () => {
+                      await addCashFlowEntry(budgetMonthId, {
+                        type: "income",
+                        label: incomeLabel,
+                        amountCents: parseMoneyToCents(incomeAmount),
+                        makeRecurring: incomeRecurring,
+                        recurringType: "income",
+                      });
+                      setIncomeLabel("");
+                      setIncomeAmount("");
+                      toast.success("Receita adicionada");
+                    })
+                  }
+                >
+                  Adicionar
+                </Button>
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="income-recurring"
+                  checked={incomeRecurring}
+                  onCheckedChange={(c) => setIncomeRecurring(Boolean(c))}
+                />
+                <Label htmlFor="income-recurring">Tornar recorrente (mensal)</Label>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Despesas fixas</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {fixed.map((item) => (
+              <div key={item.id} className="flex items-center justify-between">
+                <span>
+                  {item.label}
+                  {item.source === "template" ? (
+                    <span className="ml-2 text-xs text-muted-foreground">(recorrente)</span>
+                  ) : null}
+                </span>
+                <div className="flex items-center gap-2">
+                  <span>{formatCurrency(item.amount_cents ?? 0)}</span>
+                  {item.source !== "template" ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() =>
+                        startTransition(() => deleteCashFlowEntry(item.id))
+                      }
+                    >
+                      Remover
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            ))}
+            <div className="grid gap-2">
+              <div className="grid gap-2 md:grid-cols-3">
+                <Input
+                  placeholder="Ex: Aluguel"
+                  value={fixedLabel}
+                  onChange={(e) => setFixedLabel(e.target.value)}
+                />
+                <Input
+                  placeholder="Valor"
+                  value={fixedAmount}
+                  onChange={(e) => setFixedAmount(e.target.value)}
+                />
+                <Button
+                  disabled={pending}
+                  onClick={() =>
+                    startTransition(async () => {
+                      await addCashFlowEntry(budgetMonthId, {
+                        type: "fixed_expense",
+                        label: fixedLabel,
+                        amountCents: parseMoneyToCents(fixedAmount),
+                        makeRecurring: fixedRecurring,
+                        recurringType: "fixed_expense",
+                      });
+                      setFixedLabel("");
+                      setFixedAmount("");
+                      toast.success("Despesa fixa adicionada");
+                    })
+                  }
+                >
+                  Adicionar
+                </Button>
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="fixed-recurring"
+                  checked={fixedRecurring}
+                  onCheckedChange={(c) => setFixedRecurring(Boolean(c))}
+                />
+                <Label htmlFor="fixed-recurring">Tornar recorrente (mensal)</Label>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Parcelas de cartão (manual)</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Parcelas da importação entram automaticamente. Adicione aqui parcelas extras.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {manualCards.map((item) => (
+              <div key={item.id} className="flex items-center justify-between">
+                <span>{item.label}</span>
+                <div className="flex items-center gap-2">
+                  <span>{formatCurrency(item.amount_cents ?? 0)}</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() =>
+                      startTransition(() => deleteCashFlowEntry(item.id))
+                    }
+                  >
+                    Remover
+                  </Button>
+                </div>
+              </div>
+            ))}
+            <div className="grid gap-2 md:grid-cols-4">
+              <Input
+                placeholder="Descrição"
+                value={cardLabel}
+                onChange={(e) => setCardLabel(e.target.value)}
+              />
+              <Select value={cardAccountId} onValueChange={setCardAccountId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Conta" />
+                </SelectTrigger>
+                <SelectContent>
+                  {accounts.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Input
+                placeholder="Valor"
+                value={cardAmount}
+                onChange={(e) => setCardAmount(e.target.value)}
+              />
+              <Button
+                disabled={pending}
+                onClick={() =>
+                  startTransition(async () => {
+                    await addCashFlowEntry(budgetMonthId, {
+                      type: "card_installment",
+                      label: cardLabel,
+                      amountCents: parseMoneyToCents(cardAmount),
+                      accountId: cardAccountId,
+                    });
+                    setCardLabel("");
+                    setCardAmount("");
+                    toast.success("Parcela adicionada");
+                  })
+                }
+              >
+                Adicionar
+              </Button>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Automático este mês: {formatCurrency(cardCents - manualCards.reduce((s, e) => s + (e.amount_cents ?? 0), 0))}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Variáveis por categoria</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Marque para rastrear. Valor vazio = &quot;A definir&quot; na projeção.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {categories.map((category) => {
+              const existing = variableExpenses.find(
+                (v) => v.category_id === category.id
+              );
+              const tracked = existing?.is_tracked ?? false;
+              return (
+                <div key={category.id} className="flex flex-wrap items-center gap-2">
+                  <Checkbox
+                    checked={tracked}
+                    onCheckedChange={(checked) =>
+                      startTransition(() =>
+                        setVariableTracked(budgetMonthId, category.id, Boolean(checked))
+                      )
+                    }
+                  />
+                  <Label className="w-28">{category.name}</Label>
+                  <Input
+                    className="w-28"
+                    disabled={!tracked}
+                    defaultValue={
+                      existing?.amount_cents != null
+                        ? (existing.amount_cents / 100).toFixed(2)
+                        : ""
+                    }
+                    placeholder="A definir"
+                    onBlur={(e) => {
+                      if (!tracked) return;
+                      const raw = e.target.value.trim();
+                      const cents = raw ? parseMoneyToCents(raw) : null;
+                      startTransition(() =>
+                        setVariableExpense(budgetMonthId, category.id, cents, "manual")
+                      );
+                    }}
+                  />
+                  {tracked && !existing?.amount_cents ? (
+                    <span className="text-xs text-amber-600">A definir</span>
+                  ) : null}
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}

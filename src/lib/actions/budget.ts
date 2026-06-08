@@ -99,7 +99,7 @@ export async function addBudgetFixedExpense(
 export async function setBudgetVariableExpense(
   budgetMonthId: string,
   categoryId: string,
-  amountCents: number
+  amountCents: number | null
 ) {
   const supabase = await createClient();
   const { error } = await supabase.from("budget_variable_expenses").upsert(
@@ -107,6 +107,8 @@ export async function setBudgetVariableExpense(
       budget_month_id: budgetMonthId,
       category_id: categoryId,
       amount_cents: amountCents,
+      is_tracked: true,
+      estimation_method: amountCents ? "manual" : "none",
     },
     { onConflict: "budget_month_id,category_id" }
   );
