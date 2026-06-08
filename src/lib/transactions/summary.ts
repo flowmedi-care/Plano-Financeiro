@@ -16,8 +16,73 @@ export interface TransactionSummary {
   byPerson: PersonOwedSummary[];
 }
 
+export interface CategorySpending {
+  name: string;
+  color: string;
+  total: number;
+}
+
 export function getTransactionReferenceMonth(tx: Transaction): string {
   return tx.reference_month ?? tx.transaction_date.slice(0, 7);
+}
+
+export function computeSpendingByCategory(
+  transactions: Transaction[]
+): CategorySpending[] {
+  const map = new Map<string, CategorySpending>();
+
+  for (const tx of transactions) {
+    const key = tx.category_id ?? "__uncategorized__";
+    const current = map.get(key) ?? {
+      name: tx.category?.name ?? "Sem categoria",
+      color: tx.category?.color ?? "#94a3b8",
+      total: 0,
+    };
+    current.total += tx.amount_cents;
+    map.set(key, current);
+  }
+
+  return Array.from(map.values()).sort((a, b) => b.total - a.total);
+}
+
+export interface PersonOwedTransaction {
+  transaction: Transaction;
+  owedCents: number;
+}
+
+export function getPersonOwedTransactions(
+  transactions: Transaction[],
+  personId: string
+): PersonOwedTransaction[] {
+  return transactions
+    .map((tx) => {
+      const split = tx.splits?.find((s) => s.person_id === personId);
+      if (!split) return null;
+      return { transaction: tx, owedCents: split.amount_cents };
+    })
+    .filter((item): item is PersonOwedTransaction => item !== null)
+    .sort((a, b) =>
+      b.transaction.transaction_date.localeCompare(a.transaction.transaction_date)
+    );
+}
+
+export function computeOwedByCategory(
+  owedTransactions: PersonOwedTransaction[]
+): CategorySpending[] {
+  const map = new Map<string, CategorySpending>();
+
+  for (const { transaction: tx, owedCents } of owedTransactions) {
+    const key = tx.category_id ?? "__uncategorized__";
+    const current = map.get(key) ?? {
+      name: tx.category?.name ?? "Sem categoria",
+      color: tx.category?.color ?? "#94a3b8",
+      total: 0,
+    };
+    current.total += owedCents;
+    map.set(key, current);
+  }
+
+  return Array.from(map.values()).sort((a, b) => b.total - a.total);
 }
 
 export function computeTransactionSummary(

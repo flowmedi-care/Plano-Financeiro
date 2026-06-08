@@ -5,7 +5,12 @@ import { toast } from "sonner";
 import { classifyTransactions } from "@/lib/actions/transactions";
 import { SplitDialog } from "@/components/cartao/split-dialog";
 import { TransactionSummary } from "@/components/cartao/transaction-summary";
-import { getTransactionReferenceMonth } from "@/lib/transactions/summary";
+import { ReimbursementPdfExport } from "@/components/cartao/reimbursement-pdf-export";
+import { CategoryPieChart } from "@/components/charts/category-pie";
+import {
+  computeSpendingByCategory,
+  getTransactionReferenceMonth,
+} from "@/lib/transactions/summary";
 import type { Account, Card as CreditCard, Category, Person, Transaction } from "@/types/database";
 import { formatCurrency } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -98,6 +103,11 @@ export function TransactionTable({
     personFilter,
     uncategorizedOnly,
   ]);
+
+  const spendingByCategory = useMemo(
+    () => computeSpendingByCategory(filtered),
+    [filtered]
+  );
 
   function toggleAll(checked: boolean) {
     setSelected(checked ? filtered.map((tx) => tx.id) : []);
@@ -337,7 +347,15 @@ export function TransactionTable({
         </CardContent>
       </Card>
 
+      <CategoryPieChart data={spendingByCategory} />
+
       <TransactionSummary
+        transactions={filtered}
+        people={people}
+        monthFilter={monthFilter}
+      />
+
+      <ReimbursementPdfExport
         transactions={filtered}
         people={people}
         monthFilter={monthFilter}

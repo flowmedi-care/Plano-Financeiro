@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { computeTransactionSummary } from "@/lib/transactions/summary";
+import {
+  computeOwedByCategory,
+  computeSpendingByCategory,
+  computeTransactionSummary,
+  getPersonOwedTransactions,
+} from "@/lib/transactions/summary";
 import type { Person, Transaction } from "@/types/database";
 
 const people: Person[] = [
@@ -47,5 +52,28 @@ describe("computeTransactionSummary", () => {
     expect(summary.totalOwed).toBe(7500);
     expect(summary.selfTotal).toBe(7500);
     expect(summary.byPerson).toHaveLength(2);
+  });
+});
+
+describe("computeSpendingByCategory", () => {
+  it("sums full transaction amounts by category", () => {
+    const result = computeSpendingByCategory(transactions);
+    expect(result.reduce((s, item) => s + item.total, 0)).toBe(15000);
+  });
+});
+
+describe("getPersonOwedTransactions", () => {
+  it("returns only transactions with split for person", () => {
+    const result = getPersonOwedTransactions(transactions, "pai");
+    expect(result).toHaveLength(1);
+    expect(result[0].owedCents).toBe(5000);
+  });
+});
+
+describe("computeOwedByCategory", () => {
+  it("sums owed amounts by category", () => {
+    const owed = getPersonOwedTransactions(transactions, "pai");
+    const result = computeOwedByCategory(owed);
+    expect(result[0].total).toBe(5000);
   });
 });
