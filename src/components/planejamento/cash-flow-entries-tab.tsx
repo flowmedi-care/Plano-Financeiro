@@ -8,33 +8,25 @@ import {
   deleteCashFlowEntry,
   setVariableExpense,
   setVariableTracked,
-  updateCashFlowSettings,
 } from "@/lib/actions/cash-flow";
 import { calculateBudgetSummary } from "@/lib/budget/calculations";
 import type {
   Card as CreditCard,
   CashFlowEntry,
-  CashFlowSettings,
   Category,
   BudgetVariableExpense,
 } from "@/types/database";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, parseMoneyInputToCents } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-function parseMoneyToCents(value: string): number {
-  const normalized = value.replace(/\./g, "").replace(",", ".");
-  return Math.round(Number.parseFloat(normalized || "0") * 100);
-}
-
 export function CashFlowEntriesTab({
   budgetMonthId,
   entries,
   variableExpenses,
   categories,
-  settings,
   cardCents,
   cardGrid,
 }: {
@@ -42,7 +34,6 @@ export function CashFlowEntriesTab({
   entries: CashFlowEntry[];
   variableExpenses: BudgetVariableExpense[];
   categories: Category[];
-  settings: CashFlowSettings;
   cardCents: number;
   cardGrid: {
     months: string[];
@@ -58,10 +49,6 @@ export function CashFlowEntriesTab({
   const [fixedLabel, setFixedLabel] = useState("");
   const [fixedAmount, setFixedAmount] = useState("");
   const [fixedRecurring, setFixedRecurring] = useState(true);
-  const [openingBalance, setOpeningBalance] = useState(
-    (settings.opening_balance_cents / 100).toFixed(2)
-  );
-
   const incomes = entries.filter((e) => e.type === "income");
   const fixed = entries.filter((e) => e.type === "fixed_expense");
 
@@ -71,19 +58,6 @@ export function CashFlowEntriesTab({
     variableExpenses: variableExpenses.filter((v) => v.is_tracked),
     cardCents,
   });
-
-  function handleSaveOpeningBalance() {
-    startTransition(async () => {
-      try {
-        await updateCashFlowSettings({
-          openingBalanceCents: parseMoneyToCents(openingBalance),
-        });
-        toast.success("Saldo inicial atualizado");
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Erro");
-      }
-    });
-  }
 
   return (
     <div className="space-y-6">
@@ -141,26 +115,6 @@ export function CashFlowEntriesTab({
         </Card>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Saldo inicial</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-wrap items-end gap-4">
-          <div className="space-y-2">
-            <Label>Conta corrente (início da projeção)</Label>
-            <Input
-              className="w-[200px]"
-              value={openingBalance}
-              onChange={(e) => setOpeningBalance(e.target.value)}
-              placeholder="0,00"
-            />
-          </div>
-          <Button onClick={handleSaveOpeningBalance} disabled={pending}>
-            Salvar
-          </Button>
-        </CardContent>
-      </Card>
-
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
@@ -210,7 +164,7 @@ export function CashFlowEntriesTab({
                       await addCashFlowEntry(budgetMonthId, {
                         type: "income",
                         label: incomeLabel,
-                        amountCents: parseMoneyToCents(incomeAmount),
+                        amountCents: parseMoneyInputToCents(incomeAmount),
                         makeRecurring: incomeRecurring,
                         recurringType: "income",
                       });
@@ -283,7 +237,7 @@ export function CashFlowEntriesTab({
                       await addCashFlowEntry(budgetMonthId, {
                         type: "fixed_expense",
                         label: fixedLabel,
-                        amountCents: parseMoneyToCents(fixedAmount),
+                        amountCents: parseMoneyInputToCents(fixedAmount),
                         makeRecurring: fixedRecurring,
                         recurringType: "fixed_expense",
                       });
@@ -344,7 +298,7 @@ export function CashFlowEntriesTab({
                     onBlur={(e) => {
                       if (!tracked) return;
                       const raw = e.target.value.trim();
-                      const cents = raw ? parseMoneyToCents(raw) : null;
+                      const cents = raw ? parseMoneyInputToCents(raw) : null;
                       startTransition(() =>
                         setVariableExpense(budgetMonthId, category.id, cents, "manual")
                       );

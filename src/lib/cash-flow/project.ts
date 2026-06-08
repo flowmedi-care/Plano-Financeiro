@@ -52,11 +52,17 @@ export function buildMonthRange(
 export function projectCashFlow(params: {
   months: MonthInput[];
   openingBalanceCents: number;
+  monthlyVariableProjectionCents?: number;
   historicalByCategory: Map<string, Map<string, number>>;
   defaultEstimationMethod: EstimationMethod;
 }): MonthProjection[] {
-  const { months, openingBalanceCents, historicalByCategory, defaultEstimationMethod } =
-    params;
+  const {
+    months,
+    openingBalanceCents,
+    monthlyVariableProjectionCents = 0,
+    historicalByCategory,
+    defaultEstimationMethod,
+  } = params;
 
   const freeMonths: MonthFreeCash[] = months.map((m) => ({
     referenceMonth: m.referenceMonth,
@@ -104,6 +110,11 @@ export function projectCashFlow(params: {
 
       if (resolved.isEstimated) variableEstimated = true;
       variableCents += resolved.amountCents;
+    }
+
+    if (variableCents === 0 && monthlyVariableProjectionCents > 0) {
+      variableCents = monthlyVariableProjectionCents;
+      variableHasUndefined = false;
     }
 
     const monthBalance =

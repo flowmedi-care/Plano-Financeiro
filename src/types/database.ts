@@ -227,6 +227,7 @@ export interface CashFlowSettings {
   household_id: string | null;
   scope: ScopeType;
   opening_balance_cents: number;
+  monthly_variable_projection_cents: number;
   projection_months: number;
   default_estimation_method: EstimationMethod;
   created_at: string;

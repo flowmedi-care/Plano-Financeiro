@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { saveCardProjectionGrid } from "@/lib/actions/cash-flow";
 import type { Card } from "@/types/database";
-import { formatCurrency } from "@/lib/utils";
+import { centsToMoneyInput, formatCurrency, parseMoneyInputToCents } from "@/lib/utils";
 import { Card as UiCard, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -17,11 +17,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-function parseMoneyToCents(value: string): number {
-  const normalized = value.replace(/\./g, "").replace(",", ".");
-  return Math.round(Number.parseFloat(normalized || "0") * 100);
-}
-
 function formatMonthShort(referenceMonth: string): string {
   const [year, month] = referenceMonth.split("-").map(Number);
   const date = new Date(year, month - 1, 1);
@@ -31,10 +26,6 @@ function formatMonthShort(referenceMonth: string): string {
 
 function cardLabel(card: Card): string {
   return card.last_digits ? `${card.name} ${card.last_digits}` : card.name;
-}
-
-function centsToInput(cents: number): string {
-  return (cents / 100).toFixed(2).replace(".", ",");
 }
 
 function cellKey(cardId: string, month: string) {
@@ -51,7 +42,7 @@ function buildLocalValues(
     for (const month of months) {
       const key = cellKey(card.id, month);
       const cents = values[key];
-      out[key] = cents ? centsToInput(cents) : "";
+      out[key] = cents ? centsToMoneyInput(cents) : "";
     }
   }
   return out;
@@ -87,7 +78,7 @@ export function CardInstallmentGrid({
       totals[month] = 0;
       for (const card of cards) {
         const raw = localValues[cellKey(card.id, month)]?.trim() ?? "";
-        if (raw) totals[month] += parseMoneyToCents(raw);
+        if (raw) totals[month] += parseMoneyInputToCents(raw);
       }
     }
     return totals;
@@ -108,7 +99,7 @@ export function CardInstallmentGrid({
         return {
           cardId: card.id,
           referenceMonth: month,
-          amountCents: raw ? parseMoneyToCents(raw) : null,
+          amountCents: raw ? parseMoneyInputToCents(raw) : null,
         };
       })
     );

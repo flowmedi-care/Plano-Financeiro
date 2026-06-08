@@ -4,6 +4,7 @@ import { useState } from "react";
 import { MonthNavigator } from "@/components/planejamento/month-navigator";
 import { CashFlowEntriesTab } from "@/components/planejamento/cash-flow-entries-tab";
 import { CashFlowProjectionTab } from "@/components/planejamento/cash-flow-projection-tab";
+import { ProjectionSettingsForm } from "@/components/planejamento/projection-settings-form";
 import type {
   Card,
   CashFlowEntry,
@@ -65,13 +66,14 @@ export function PlanejamentoPanel({
         </div>
       </div>
 
+      <ProjectionSettingsForm settings={settings} />
+
       <div className={cn(tab === "entries" ? "block" : "hidden")}>
         <CashFlowEntriesTab
           budgetMonthId={budgetMonthId}
           entries={entries}
           variableExpenses={variableExpenses}
           categories={categories}
-          settings={settings}
           cardCents={cardCents}
           cardGrid={cardGrid}
         />

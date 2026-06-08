@@ -56,19 +56,30 @@ export async function getOrCreateCashFlowSettings() {
 
 export async function updateCashFlowSettings(params: {
   openingBalanceCents?: number;
+  monthlyVariableProjectionCents?: number;
   projectionMonths?: number;
   defaultEstimationMethod?: EstimationMethod;
 }) {
   const supabase = await createClient();
   const settings = await getOrCreateCashFlowSettings();
 
+  const patch: Record<string, number | EstimationMethod> = {};
+  if (params.openingBalanceCents !== undefined) {
+    patch.opening_balance_cents = params.openingBalanceCents;
+  }
+  if (params.monthlyVariableProjectionCents !== undefined) {
+    patch.monthly_variable_projection_cents = params.monthlyVariableProjectionCents;
+  }
+  if (params.projectionMonths !== undefined) {
+    patch.projection_months = params.projectionMonths;
+  }
+  if (params.defaultEstimationMethod !== undefined) {
+    patch.default_estimation_method = params.defaultEstimationMethod;
+  }
+
   const { error } = await supabase
     .from("cash_flow_settings")
-    .update({
-      opening_balance_cents: params.openingBalanceCents,
-      projection_months: params.projectionMonths,
-      default_estimation_method: params.defaultEstimationMethod,
-    })
+    .update(patch)
     .eq("id", settings.id);
 
   if (error) throw new Error(error.message);
@@ -620,6 +631,8 @@ export async function getCashFlowProjection(startYear: number, startMonth: numbe
   const projections = projectCashFlow({
     months: monthInputs,
     openingBalanceCents: settings.opening_balance_cents,
+    monthlyVariableProjectionCents:
+      settings.monthly_variable_projection_cents ?? 0,
     historicalByCategory,
     defaultEstimationMethod: settings.default_estimation_method,
   });
