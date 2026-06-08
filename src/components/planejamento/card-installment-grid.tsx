@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { setCardProjection } from "@/lib/actions/cash-flow";
+import { saveCardProjectionGrid } from "@/lib/actions/cash-flow";
 import type { Card } from "@/types/database";
 import { formatCurrency } from "@/lib/utils";
 import { Card as UiCard, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -36,6 +37,26 @@ function centsToInput(cents: number): string {
   return (cents / 100).toFixed(2).replace(".", ",");
 }
 
+function cellKey(cardId: string, month: string) {
+  return `${cardId}|${month}`;
+}
+
+function buildLocalValues(
+  months: string[],
+  cards: Card[],
+  values: Record<string, number>
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const card of cards) {
+    for (const month of months) {
+      const key = cellKey(card.id, month);
+      const cents = values[key];
+      out[key] = cents ? centsToInput(cents) : "";
+    }
+  }
+  return out;
+}
+
 export function CardInstallmentGrid({
   months,
   cards,
@@ -50,36 +71,62 @@ export function CardInstallmentGrid({
   readOnly?: boolean;
 }) {
   const [pending, startTransition] = useTransition();
-  const [localValues, setLocalValues] = useState<Record<string, string>>({});
+  const [localValues, setLocalValues] = useState(() =>
+    buildLocalValues(months, cards, values)
+  );
+  const [isDirty, setIsDirty] = useState(false);
 
-  function cellKey(cardId: string, month: string) {
-    return `${cardId}|${month}`;
+  useEffect(() => {
+    setLocalValues(buildLocalValues(months, cards, values));
+    setIsDirty(false);
+  }, [months, cards, values]);
+
+  const liveTotals = useMemo(() => {
+    const totals: Record<string, number> = {};
+    for (const month of months) {
+      totals[month] = 0;
+      for (const card of cards) {
+        const raw = localValues[cellKey(card.id, month)]?.trim() ?? "";
+        if (raw) totals[month] += parseMoneyToCents(raw);
+      }
+    }
+    return totals;
+  }, [localValues, months, cards]);
+
+  function handleChange(cardId: string, month: string, raw: string) {
+    setLocalValues((prev) => ({
+      ...prev,
+      [cellKey(cardId, month)]: raw,
+    }));
+    setIsDirty(true);
   }
 
-  function displayValue(cardId: string, month: string): string {
-    const key = cellKey(cardId, month);
-    if (localValues[key] !== undefined) return localValues[key];
-    const cents = values[key];
-    return cents ? centsToInput(cents) : "";
-  }
-
-  function handleBlur(cardId: string, month: string, raw: string) {
-    if (readOnly) return;
+  function handleSave() {
+    const cells = cards.flatMap((card) =>
+      months.map((month) => {
+        const raw = localValues[cellKey(card.id, month)]?.trim() ?? "";
+        return {
+          cardId: card.id,
+          referenceMonth: month,
+          amountCents: raw ? parseMoneyToCents(raw) : null,
+        };
+      })
+    );
 
     startTransition(async () => {
       try {
-        const trimmed = raw.trim();
-        const cents = trimmed ? parseMoneyToCents(trimmed) : null;
-        await setCardProjection({ cardId, referenceMonth: month, amountCents: cents });
-        setLocalValues((prev) => {
-          const next = { ...prev };
-          delete next[cellKey(cardId, month)];
-          return next;
-        });
+        await saveCardProjectionGrid(cells);
+        setIsDirty(false);
+        toast.success("Fatura por cartão salva");
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Erro ao salvar");
       }
     });
+  }
+
+  function handleDiscard() {
+    setLocalValues(buildLocalValues(months, cards, values));
+    setIsDirty(false);
   }
 
   if (cards.length === 0) {
@@ -97,14 +144,32 @@ export function CardInstallmentGrid({
     );
   }
 
+  const displayTotals = readOnly ? totalsByMonth : liveTotals;
+
   return (
     <UiCard>
-      <CardHeader>
-        <CardTitle>Fatura por cartão (projeção)</CardTitle>
-        <p className="text-sm text-muted-foreground">
-          Preencha manualmente o valor previsto de cada cartão por mês. Isso alimenta a coluna
-          &quot;Cartão&quot; do fluxo de caixa — separado dos valores reais da importação.
-        </p>
+      <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-4">
+        <div>
+          <CardTitle>Fatura por cartão (projeção)</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Preencha os valores e clique em Salvar. Uma única gravação atualiza todos os meses.
+          </p>
+        </div>
+        {!readOnly ? (
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!isDirty || pending}
+              onClick={handleDiscard}
+            >
+              Descartar
+            </Button>
+            <Button size="sm" disabled={!isDirty || pending} onClick={handleSave}>
+              {pending ? "Salvando..." : "Salvar fatura"}
+            </Button>
+          </div>
+        ) : null}
       </CardHeader>
       <CardContent className="overflow-x-auto p-0">
         <Table>
@@ -139,14 +204,8 @@ export function CardInstallmentGrid({
                         className="h-8 w-[96px] text-right text-sm"
                         placeholder="—"
                         disabled={pending}
-                        value={displayValue(card.id, month)}
-                        onChange={(e) =>
-                          setLocalValues((prev) => ({
-                            ...prev,
-                            [cellKey(card.id, month)]: e.target.value,
-                          }))
-                        }
-                        onBlur={(e) => handleBlur(card.id, month, e.target.value)}
+                        value={localValues[cellKey(card.id, month)] ?? ""}
+                        onChange={(e) => handleChange(card.id, month, e.target.value)}
                       />
                     )}
                   </TableCell>
@@ -157,8 +216,8 @@ export function CardInstallmentGrid({
               <TableCell className="sticky left-0 z-10 bg-background">Total</TableCell>
               {months.map((month) => (
                 <TableCell key={month} className="text-right">
-                  {totalsByMonth[month] > 0
-                    ? formatCurrency(totalsByMonth[month])
+                  {displayTotals[month] > 0
+                    ? formatCurrency(displayTotals[month])
                     : "—"}
                 </TableCell>
               ))}

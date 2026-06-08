@@ -409,6 +409,125 @@ export async function setCardProjection(params: {
   revalidatePath("/planejamento");
 }
 
+export async function saveCardProjectionGrid(
+  cells: { cardId: string; referenceMonth: string; amountCents: number | null }[]
+) {
+  if (cells.length === 0) return;
+
+  const supabase = await createClient();
+  const cards = await getAllCards();
+  const cardMap = new Map(cards.map((c) => [c.id, c]));
+
+  const monthRefs = [...new Set(cells.map((c) => c.referenceMonth))];
+  const budgetMonthByRef = new Map<string, string>();
+
+  for (const ref of monthRefs) {
+    const [year, month] = ref.split("-").map(Number);
+    const budgetMonth = await getOrCreateBudgetMonth(year, month);
+    budgetMonthByRef.set(ref, budgetMonth.id);
+  }
+
+  const budgetMonthIds = [...budgetMonthByRef.values()];
+  const { data: existingRows, error: fetchError } = await supabase
+    .from("cash_flow_entries")
+    .select("id, budget_month_id, card_id")
+    .in("budget_month_id", budgetMonthIds)
+    .eq("type", "card_installment")
+    .not("card_id", "is", null);
+
+  if (fetchError) throw new Error(fetchError.message);
+
+  const existingMap = new Map(
+    (existingRows ?? []).map((row) => [`${row.budget_month_id}|${row.card_id}`, row.id])
+  );
+
+  const toDelete: string[] = [];
+  const toInsert: {
+    budget_month_id: string;
+    type: "card_installment";
+    label: string;
+    amount_cents: number;
+    card_id: string;
+    account_id: string;
+    source: "manual";
+    is_confirmed: boolean;
+  }[] = [];
+  const toUpdate: {
+    id: string;
+    label: string;
+    amount_cents: number;
+    account_id: string;
+  }[] = [];
+
+  for (const cell of cells) {
+    const card = cardMap.get(cell.cardId);
+    if (!card) continue;
+
+    const budgetMonthId = budgetMonthByRef.get(cell.referenceMonth);
+    if (!budgetMonthId) continue;
+
+    const existingId = existingMap.get(`${budgetMonthId}|${cell.cardId}`);
+
+    if (!cell.amountCents || cell.amountCents <= 0) {
+      if (existingId) toDelete.push(existingId);
+      continue;
+    }
+
+    const label = card.last_digits
+      ? `${card.name} ${card.last_digits}`
+      : card.name;
+
+    if (existingId) {
+      toUpdate.push({
+        id: existingId,
+        label,
+        amount_cents: cell.amountCents,
+        account_id: card.account_id,
+      });
+    } else {
+      toInsert.push({
+        budget_month_id: budgetMonthId,
+        type: "card_installment",
+        label,
+        amount_cents: cell.amountCents,
+        card_id: cell.cardId,
+        account_id: card.account_id,
+        source: "manual",
+        is_confirmed: true,
+      });
+    }
+  }
+
+  if (toDelete.length > 0) {
+    const { error } = await supabase
+      .from("cash_flow_entries")
+      .delete()
+      .in("id", toDelete);
+    if (error) throw new Error(error.message);
+  }
+
+  if (toInsert.length > 0) {
+    const { error } = await supabase.from("cash_flow_entries").insert(toInsert);
+    if (error) throw new Error(error.message);
+  }
+
+  for (const row of toUpdate) {
+    const { error } = await supabase
+      .from("cash_flow_entries")
+      .update({
+        label: row.label,
+        amount_cents: row.amount_cents,
+        account_id: row.account_id,
+        source: "manual",
+        is_confirmed: true,
+      })
+      .eq("id", row.id);
+    if (error) throw new Error(error.message);
+  }
+
+  revalidatePath("/planejamento");
+}
+
 export async function getCardProjectionGrid(startYear: number, startMonth: number) {
   const settings = await getOrCreateCashFlowSettings();
   const months = buildMonthRange(
