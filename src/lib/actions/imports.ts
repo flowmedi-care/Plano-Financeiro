@@ -69,6 +69,7 @@ export async function confirmImport(params: {
         household_id: scope === "household" ? householdId : null,
         scope,
         account_id: params.accountId,
+        card_id: tx.cardId ?? null,
         import_id: importRow.id,
         transaction_date: tx.date,
         description: tx.description,
@@ -82,6 +83,7 @@ export async function confirmImport(params: {
         auto_categorized: Boolean(categoryId),
         dedup_hash: buildDedupHash({
           accountId: params.accountId,
+          cardId: tx.cardId,
           date: tx.date,
           amountCents: tx.amountCents,
           merchantKey: tx.merchantKey,
@@ -93,7 +95,7 @@ export async function confirmImport(params: {
   if (rows.length > 0) {
     const { error: txError } = await supabase
       .from("transactions")
-      .upsert(rows, { onConflict: "account_id,dedup_hash", ignoreDuplicates: true });
+      .insert(rows);
 
     if (txError) {
       await supabase
@@ -112,6 +114,7 @@ export async function confirmImport(params: {
         household_id: scope === "household" ? householdId : null,
         scope,
         account_id: params.accountId,
+        card_id: tx.cardId ?? null,
         transaction_id: null,
         merchant_key: tx.merchantKey,
         description: tx.description,

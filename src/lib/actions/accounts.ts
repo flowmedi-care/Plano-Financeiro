@@ -13,7 +13,7 @@ export async function getAccounts() {
 
   const { scope, householdId } = getActiveScope(profile);
 
-  let query = supabase.from("accounts").select("*").order("name");
+  let query = supabase.from("accounts").select("*, cards(*)").order("name");
 
   if (scope === "household" && householdId) {
     query = query.eq("scope", "household").eq("household_id", householdId);
@@ -35,16 +35,25 @@ export async function createAccount(formData: FormData) {
   const name = String(formData.get("name"));
   const bank = String(formData.get("bank")) as BankProvider;
 
-  const { error } = await supabase.from("accounts").insert({
-    user_id: profile.id,
-    household_id: scope === "household" ? householdId : null,
-    scope,
-    name,
-    bank,
-    account_type: "credit_card",
-  });
+  const { data: account, error } = await supabase
+    .from("accounts")
+    .insert({
+      user_id: profile.id,
+      household_id: scope === "household" ? householdId : null,
+      scope,
+      name,
+      bank,
+      account_type: "credit_card",
+    })
+    .select()
+    .single();
 
-  if (error) throw new Error(error.message);
+  if (error || !account) throw new Error(error?.message ?? "Erro ao criar conta");
+
+  await supabase.from("cards").insert({
+    account_id: account.id,
+    name: "Cartão principal",
+  });
   revalidatePath("/configuracoes");
   revalidatePath("/cartao/importar");
 }

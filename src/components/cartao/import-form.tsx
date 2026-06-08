@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import type { Card as CreditCard, DetectedCardSummary } from "@/types/database";
 import { toast } from "sonner";
 import { Plus, Trash2, Upload } from "lucide-react";
 import { confirmImport } from "@/lib/actions/imports";
@@ -43,10 +44,27 @@ function parseMoneyToCents(value: string): number | null {
   return Math.round(amount * 100);
 }
 
-function toEditable(transactions: ParsedTransaction[]): EditableTransaction[] {
+function resolveCardId(
+  cardLastDigits: string | undefined,
+  cards: CreditCard[]
+): string | null {
+  if (!cards.length) return null;
+  if (cardLastDigits) {
+    const match = cards.find((c) => c.last_digits === cardLastDigits);
+    if (match) return match.id;
+  }
+  if (cards.length === 1) return cards[0].id;
+  return null;
+}
+
+function toEditable(
+  transactions: ParsedTransaction[],
+  cards: CreditCard[]
+): EditableTransaction[] {
   return transactions.map((tx) => ({
     ...tx,
     _id: crypto.randomUUID(),
+    cardId: tx.cardId ?? resolveCardId(tx.cardLastDigits, cards),
   }));
 }
 
@@ -61,6 +79,7 @@ export function ImportForm({ accounts }: { accounts: Account[] }) {
     ParseResult["installmentProjections"]
   >([]);
   const [warnings, setWarnings] = useState<string[]>([]);
+  const [detectedCards, setDetectedCards] = useState<DetectedCardSummary[]>([]);
   const [expectedTotal, setExpectedTotal] = useState("");
   const [pending, startTransition] = useTransition();
 
@@ -71,6 +90,7 @@ export function ImportForm({ accounts }: { accounts: Account[] }) {
   const [newInstallmentTotal, setNewInstallmentTotal] = useState("");
 
   const selectedAccount = accounts.find((a) => a.id === accountId);
+  const accountCards = selectedAccount?.cards ?? [];
   const acceptedType = selectedAccount?.bank === "nubank" ? ".csv" : ".pdf";
   const hasPreview = transactions.length > 0;
 
@@ -78,6 +98,8 @@ export function ImportForm({ accounts }: { accounts: Account[] }) {
     () => transactions.filter((tx) => !tx.isPayment),
     [transactions]
   );
+
+  const missingCardCount = importableTransactions.filter((tx) => !tx.cardId).length;
 
   const totalCents = useMemo(
     () => importableTransactions.reduce((sum, tx) => sum + tx.amountCents, 0),
@@ -106,9 +128,10 @@ export function ImportForm({ accounts }: { accounts: Account[] }) {
       return;
     }
 
-    setTransactions(toEditable(data.transactions));
+    setTransactions(toEditable(data.transactions, accountCards));
     setInstallmentProjections(data.installmentProjections);
     setWarnings(data.warnings);
+    setDetectedCards(data.detectedCards ?? []);
     setExpectedTotal("");
 
     if (data.referenceMonth) {
@@ -148,6 +171,7 @@ export function ImportForm({ accounts }: { accounts: Account[] }) {
         installmentTotal,
         isPayment: false,
         isIof: false,
+        cardId: accountCards.length === 1 ? accountCards[0].id : null,
       },
     ]);
 
@@ -167,6 +191,16 @@ export function ImportForm({ accounts }: { accounts: Account[] }) {
       return;
     }
 
+    if (accountCards.length === 0) {
+      toast.error("Cadastre ao menos um cartão para esta conta em Configurações");
+      return;
+    }
+
+    if (missingCardCount > 0) {
+      toast.error("Selecione o cartão para todos os lançamentos antes de importar");
+      return;
+    }
+
     startTransition(async () => {
       try {
         const result = await confirmImport({
@@ -181,6 +215,7 @@ export function ImportForm({ accounts }: { accounts: Account[] }) {
         setTransactions([]);
         setInstallmentProjections([]);
         setWarnings([]);
+        setDetectedCards([]);
         setExpectedTotal("");
         setFile(null);
       } catch (error) {
@@ -243,11 +278,22 @@ export function ImportForm({ accounts }: { accounts: Account[] }) {
                   setTransactions([]);
                   setInstallmentProjections([]);
                   setWarnings([]);
+                  setDetectedCards([]);
                   setExpectedTotal("");
                 }}
               />
             </div>
           </div>
+
+          {accountCards.length === 0 ? (
+            <p className="text-sm text-amber-700">
+              Esta conta não tem cartões cadastrados. Adicione em Configurações antes de importar.
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Cartões: {accountCards.map((c) => c.name).join(", ")}
+            </p>
+          )}
 
           <div className="flex gap-2">
             <Button onClick={handleParse} disabled={!file || pending}>
@@ -322,12 +368,41 @@ export function ImportForm({ accounts }: { accounts: Account[] }) {
               ) : null}
             </div>
 
+            {detectedCards.length > 0 ? (
+              <div className="rounded-md border border-dashed p-3 text-sm">
+                <p className="font-medium">Cartões detectados no PDF</p>
+                <div className="mt-2 flex flex-wrap gap-3">
+                  {detectedCards.map((card) => (
+                    <span key={card.lastDigits} className="text-muted-foreground">
+                      Final {card.lastDigits}: {formatCurrency(card.totalCents)}
+                    </span>
+                  ))}
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Cadastre os cartões com esses finais em Configurações para separar os gastos.
+                </p>
+              </div>
+            ) : null}
+
+            {installmentProjections.length > 0 ? (
+              <div className="rounded-md bg-blue-50 p-3 text-sm text-blue-800">
+                <p className="font-medium">Parcelas futuras (não entram nesta fatura)</p>
+                {installmentProjections.map((proj) => (
+                  <p key={`${proj.merchantKey}-${proj.installmentCurrent}`}>
+                    {proj.description} — {proj.installmentCurrent}/{proj.installmentTotal}:{" "}
+                    {formatCurrency(proj.amountCents)}
+                  </p>
+                ))}
+              </div>
+            ) : null}
+
             <div className="max-h-[480px] overflow-auto rounded-md border">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Data</TableHead>
                     <TableHead>Descrição</TableHead>
+                    <TableHead>Cartão</TableHead>
                     <TableHead>Parcela</TableHead>
                     <TableHead className="text-right">Valor</TableHead>
                     <TableHead className="w-12" />
@@ -342,6 +417,30 @@ export function ImportForm({ accounts }: { accounts: Account[] }) {
                           <span>{tx.description}</span>
                           {tx.isIof ? <Badge variant="warning">IOF</Badge> : null}
                         </div>
+                      </TableCell>
+                      <TableCell>
+                        <Select
+                          value={tx.cardId ?? ""}
+                          onValueChange={(value) =>
+                            setTransactions((prev) =>
+                              prev.map((item) =>
+                                item._id === tx._id ? { ...item, cardId: value } : item
+                              )
+                            )
+                          }
+                        >
+                          <SelectTrigger className="w-[140px]">
+                            <SelectValue placeholder="Cartão" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {accountCards.map((card) => (
+                              <SelectItem key={card.id} value={card.id}>
+                                {card.name}
+                                {card.last_digits ? ` ·${card.last_digits}` : ""}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </TableCell>
                       <TableCell>
                         {tx.installmentCurrent && tx.installmentTotal

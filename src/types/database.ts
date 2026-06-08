@@ -47,6 +47,16 @@ export interface Account {
   bank: BankProvider;
   account_type: AccountType;
   created_at: string;
+  cards?: Card[];
+}
+
+export interface Card {
+  id: string;
+  account_id: string;
+  name: string;
+  last_digits: string | null;
+  holder_name: string | null;
+  created_at: string;
 }
 
 export interface Category {
@@ -92,6 +102,7 @@ export interface Transaction {
   household_id: string | null;
   scope: ScopeType;
   account_id: string;
+  card_id: string | null;
   import_id: string | null;
   transaction_date: string;
   description: string;
@@ -107,6 +118,7 @@ export interface Transaction {
   created_at: string;
   category?: Category | null;
   account?: Account | null;
+  card?: Card | null;
 }
 
 export interface BudgetMonth {
@@ -180,6 +192,13 @@ export interface ParsedTransaction {
   isPayment: boolean;
   isIof: boolean;
   cardLastDigits?: string;
+  cardId?: string | null;
+}
+
+export interface DetectedCardSummary {
+  lastDigits: string;
+  totalCents: number;
+  holderName?: string;
 }
 
 export interface ParsedInstallmentProjection {
@@ -195,6 +214,7 @@ export interface ParsedInstallmentProjection {
 export interface ParseResult {
   transactions: ParsedTransaction[];
   installmentProjections: ParsedInstallmentProjection[];
+  detectedCards?: DetectedCardSummary[];
   referenceMonth?: string;
   warnings: string[];
 }

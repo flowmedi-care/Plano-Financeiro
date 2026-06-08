@@ -24,7 +24,10 @@ Se aparecer o erro *"No Output Directory named public"*, vá em **Project Settin
 ## Setup
 
 1. Crie um projeto no [Supabase](https://supabase.com)
-2. Execute a migration em `supabase/migrations/001_initial_schema.sql` no SQL Editor
+2. Execute as migrations no SQL Editor, nesta ordem:
+   - `supabase/migrations/001_initial_schema.sql`
+   - `supabase/migrations/002_fix_signup_trigger.sql`
+   - `supabase/migrations/003_add_cards.sql`
 3. Copie `.env.example` para `.env.local` e preencha:
 
 ```env

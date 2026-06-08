@@ -1,13 +1,15 @@
 import { TransactionTable } from "@/components/cartao/transaction-table";
 import { getAccounts } from "@/lib/actions/accounts";
+import { getAllCards } from "@/lib/actions/cards";
 import { getCategories } from "@/lib/actions/categories";
 import { getTransactions } from "@/lib/actions/transactions";
 
 export default async function TransactionsPage() {
-  const [transactions, categories, accounts] = await Promise.all([
+  const [transactions, categories, accounts, cards] = await Promise.all([
     getTransactions(),
     getCategories(),
     getAccounts(),
+    getAllCards(),
   ]);
 
   return (
@@ -22,6 +24,7 @@ export default async function TransactionsPage() {
         transactions={transactions}
         categories={categories}
         accounts={accounts}
+        cards={cards}
       />
     </div>
   );

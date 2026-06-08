@@ -2,6 +2,7 @@ import { parseBrazilianAmount } from "@/lib/parsers/amount";
 import { extractInstallmentFromItauLine } from "@/lib/parsers/installments";
 import { normalizeMerchant } from "@/lib/merchants/normalize";
 import type {
+  DetectedCardSummary,
   ParseResult,
   ParsedInstallmentProjection,
   ParsedTransaction,
@@ -62,18 +63,28 @@ const NOISE_PATTERNS = [
   /^veículos \./i,
   /^hobby \./i,
   /^turismo/i,
+  /^próxima fatura/i,
+  /^demais faturas/i,
+  /^total para próximas faturas/i,
 ];
 
+function normalizeLine(line: string): string {
+  return line.replace(/\s+/g, " ").trim();
+}
+
 function isNoiseLine(line: string): boolean {
-  const trimmed = line.trim();
+  const trimmed = normalizeLine(line);
   if (!trimmed || trimmed.length < 8) return true;
+  const compact = trimmed.replace(/\s/g, " ").toLowerCase();
+  if (/^próximafatura|^demaisfaturas|^totalparapróximasfaturas/i.test(compact.replace(/\s/g, ""))) {
+    return true;
+  }
   return NOISE_PATTERNS.some((pattern) => pattern.test(trimmed));
 }
 
 function toIsoDate(dayMonth: string, referenceYear: number): string {
   const [day, month] = dayMonth.split("/").map(Number);
-  const year = referenceYear;
-  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  return `${referenceYear}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
 function parseTransactionLine(
@@ -135,6 +146,120 @@ function parseTransactionLine(
   };
 }
 
+function getFutureSectionLineIndices(lines: string[]): Set<number> {
+  const indices = new Set<number>();
+
+  for (let i = 0; i < lines.length - 1; i++) {
+    const compact = lines[i].replace(/\s/g, "").toLowerCase();
+    if (/comprasparceladas.*pr[oó]ximasfaturas/i.test(compact)) {
+      for (let j = i + 1; j < lines.length; j++) {
+        const nextCompact = lines[j].replace(/\s/g, "").toLowerCase();
+        if (/limitesdecr[eé]dito|limitedetotaldecr[eé]dito/i.test(nextCompact)) {
+          break;
+        }
+        if (/^\d{2}\/\d{2}/.test(lines[j])) {
+          indices.add(j);
+        }
+      }
+    }
+
+    if (lines[i] === "L" && lines[i + 1] === "E") {
+      for (let j = i + 2; j < lines.length; j++) {
+        const nextCompact = lines[j].replace(/\s/g, "").toLowerCase();
+        if (
+          /comprasparceladas|limitesdecr[eé]dito|limitedetotaldecr[eé]dito/i.test(
+            nextCompact
+          )
+        ) {
+          break;
+        }
+        if (/^\d{2}\/\d{2}/.test(lines[j])) {
+          indices.add(j);
+        }
+      }
+    }
+  }
+
+  return indices;
+}
+
+function excludeFutureInstallmentDuplicates(
+  transactions: ParsedTransaction[]
+): { current: ParsedTransaction[]; projections: ParsedInstallmentProjection[] } {
+  const groups = new Map<string, ParsedTransaction[]>();
+
+  for (const tx of transactions) {
+    if (tx.isPayment || !tx.installmentCurrent || !tx.installmentTotal) continue;
+    const key = `${tx.merchantKey}|${tx.amountCents}|${tx.installmentTotal}`;
+    const group = groups.get(key) ?? [];
+    group.push(tx);
+    groups.set(key, group);
+  }
+
+  const excluded = new Set<ParsedTransaction>();
+  const projections: ParsedInstallmentProjection[] = [];
+
+  for (const group of groups.values()) {
+    if (group.length <= 1) continue;
+
+    const sorted = [...group].sort(
+      (a, b) => (a.installmentCurrent ?? 0) - (b.installmentCurrent ?? 0)
+    );
+    const [current, ...future] = sorted;
+
+    for (const tx of future) {
+      excluded.add(tx);
+      projections.push({
+        date: tx.date,
+        description: tx.description,
+        merchantKey: tx.merchantKey,
+        installmentCurrent: tx.installmentCurrent!,
+        installmentTotal: tx.installmentTotal!,
+        amountCents: tx.amountCents,
+        cardLastDigits: tx.cardLastDigits,
+      });
+    }
+
+    void current;
+  }
+
+  return {
+    current: transactions.filter((tx) => !excluded.has(tx)),
+    projections,
+  };
+}
+
+function extractDetectedCards(lines: string[]): DetectedCardSummary[] {
+  const cards: DetectedCardSummary[] = [];
+
+  for (const line of lines) {
+    const summaryMatch = line.match(
+      /lan[cç]amentos\s*no\s*cart[aã]o\s*\(final\s*(\d{4})\)\s*([\d.,]+)/i
+    );
+    if (summaryMatch) {
+      try {
+        cards.push({
+          lastDigits: summaryMatch[1],
+          totalCents: parseBrazilianAmount(summaryMatch[2]),
+        });
+      } catch {
+        // ignore
+      }
+      continue;
+    }
+
+    const holderMatch = line.match(/\(final\s*(\d{4})\)/i);
+    if (holderMatch && cards.length > 0) {
+      const last = cards[cards.length - 1];
+      if (last.lastDigits === holderMatch[1] && !last.holderName) {
+        last.holderName = line.replace(/\(final\s*\d{4}\)/i, "").trim();
+      }
+    }
+  }
+
+  return cards;
+}
+
 function extractReferenceYear(text: string): number {
   const emissaoMatch = text.match(/Emissão:\s*(\d{2})\/(\d{2})\/(\d{4})/i);
   if (emissaoMatch) return Number(emissaoMatch[3]);
@@ -153,48 +278,19 @@ function extractReferenceMonth(text: string): string | undefined {
   return undefined;
 }
 
-function extractFutureInstallments(
-  lines: string[],
-  referenceYear: number
-): ParsedInstallmentProjection[] {
-  const projections: ParsedInstallmentProjection[] = [];
-  let inFutureSection = false;
-
+function extractExpectedTotalCents(lines: string[]): number | null {
   for (const line of lines) {
-    if (/compras parceladas\s*-\s*próximas faturas/i.test(line)) {
-      inFutureSection = true;
-      continue;
+    const compact = line.replace(/\s/g, "");
+    const match = compact.match(/Totaldoslançamentosatuais([\d.,]+)/i);
+    if (match) {
+      try {
+        return parseBrazilianAmount(match[1]);
+      } catch {
+        return null;
+      }
     }
-
-    if (inFutureSection && /limites de crédito/i.test(line)) {
-      break;
-    }
-
-    if (!inFutureSection) continue;
-
-    const parsed = parseTransactionLine(line, referenceYear);
-    if (!parsed) continue;
-
-    const {
-      date,
-      description: merchant,
-      installmentCurrent: current,
-      installmentTotal: total,
-      amountCents,
-    } = parsed;
-    if (!current || !total || current >= total) continue;
-
-    projections.push({
-      date,
-      description: merchant,
-      merchantKey: normalizeMerchant(merchant),
-      installmentCurrent: current,
-      installmentTotal: total,
-      amountCents,
-    });
   }
-
-  return projections;
+  return null;
 }
 
 export function parseItauPdfText(text: string): ParseResult {
@@ -202,12 +298,17 @@ export function parseItauPdfText(text: string): ParseResult {
   const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   const referenceYear = extractReferenceYear(text);
   const referenceMonth = extractReferenceMonth(text);
+  const futureLineIndices = getFutureSectionLineIndices(lines);
+  const detectedCards = extractDetectedCards(lines);
+  const expectedTotalCents = extractExpectedTotalCents(lines);
 
-  const transactions: ParsedTransaction[] = [];
+  const rawTransactions: ParsedTransaction[] = [];
   const seen = new Set<string>();
 
-  for (const line of lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
     if (isNoiseLine(line)) continue;
+    if (futureLineIndices.has(i)) continue;
 
     const parsed = parseTransactionLine(line, referenceYear);
     if (!parsed) continue;
@@ -216,10 +317,49 @@ export function parseItauPdfText(text: string): ParseResult {
     if (seen.has(key)) continue;
     seen.add(key);
 
-    transactions.push(parsed);
+    rawTransactions.push(parsed);
   }
 
-  const installmentProjections = extractFutureInstallments(lines, referenceYear);
+  const { current: transactions, projections: duplicateProjections } =
+    excludeFutureInstallmentDuplicates(rawTransactions);
+
+  const futureSectionProjections: ParsedInstallmentProjection[] = [];
+  for (const index of futureLineIndices) {
+    const parsed = parseTransactionLine(lines[index], referenceYear);
+    if (!parsed || !parsed.installmentCurrent || !parsed.installmentTotal) continue;
+    if (parsed.installmentCurrent <= 1) continue;
+
+    futureSectionProjections.push({
+      date: parsed.date,
+      description: parsed.description,
+      merchantKey: parsed.merchantKey,
+      installmentCurrent: parsed.installmentCurrent,
+      installmentTotal: parsed.installmentTotal,
+      amountCents: parsed.amountCents,
+      cardLastDigits: parsed.cardLastDigits,
+    });
+  }
+
+  const installmentProjections = [
+    ...duplicateProjections,
+    ...futureSectionProjections,
+  ];
+
+  const actualTotal = transactions
+    .filter((tx) => !tx.isPayment)
+    .reduce((sum, tx) => sum + tx.amountCents, 0);
+
+  if (expectedTotalCents !== null && actualTotal !== expectedTotalCents) {
+    warnings.push(
+      `Total calculado (${(actualTotal / 100).toFixed(2)}) difere do total da fatura (${(expectedTotalCents / 100).toFixed(2)}). Revise os lançamentos.`
+    );
+  }
+
+  if (installmentProjections.length > 0) {
+    warnings.push(
+      `${installmentProjections.length} parcela(s) futura(s) foram excluídas desta fatura e salvas apenas como projeção.`
+    );
+  }
 
   if (transactions.length === 0) {
     warnings.push("Nenhuma transação encontrada no PDF. Verifique o arquivo.");
@@ -228,6 +368,7 @@ export function parseItauPdfText(text: string): ParseResult {
   return {
     transactions,
     installmentProjections,
+    detectedCards,
     referenceMonth,
     warnings,
   };

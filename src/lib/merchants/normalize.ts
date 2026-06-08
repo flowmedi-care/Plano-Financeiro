@@ -10,6 +10,7 @@ export function normalizeMerchant(description: string): string {
 
 export function buildDedupHash(params: {
   accountId: string;
+  cardId?: string | null;
   date: string;
   amountCents: number;
   merchantKey: string;
@@ -18,6 +19,7 @@ export function buildDedupHash(params: {
   const installment = params.installmentCurrent ?? 0;
   return [
     params.accountId,
+    params.cardId ?? "none",
     params.date,
     params.amountCents,
     params.merchantKey,

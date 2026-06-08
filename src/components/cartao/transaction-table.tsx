@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { classifyTransactions } from "@/lib/actions/transactions";
-import type { Account, Category, Transaction } from "@/types/database";
+import type { Account, Card as CreditCard, Category, Transaction } from "@/types/database";
 import { formatCurrency } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,15 +30,18 @@ export function TransactionTable({
   transactions,
   categories,
   accounts,
+  cards,
 }: {
   transactions: Transaction[];
   categories: Category[];
   accounts: Account[];
+  cards: CreditCard[];
 }) {
   const [selected, setSelected] = useState<string[]>([]);
   const [categoryId, setCategoryId] = useState(categories[0]?.id ?? "");
   const [remember, setRemember] = useState(true);
   const [accountFilter, setAccountFilter] = useState("all");
+  const [cardFilter, setCardFilter] = useState("all");
   const [monthFilter, setMonthFilter] = useState("all");
   const [uncategorizedOnly, setUncategorizedOnly] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -53,11 +56,12 @@ export function TransactionTable({
   const filtered = useMemo(() => {
     return transactions.filter((tx) => {
       if (accountFilter !== "all" && tx.account_id !== accountFilter) return false;
+      if (cardFilter !== "all" && tx.card_id !== cardFilter) return false;
       if (monthFilter !== "all" && !tx.transaction_date.startsWith(monthFilter)) return false;
       if (uncategorizedOnly && tx.category_id) return false;
       return true;
     });
-  }, [transactions, accountFilter, monthFilter, uncategorizedOnly]);
+  }, [transactions, accountFilter, cardFilter, monthFilter, uncategorizedOnly]);
 
   function toggleAll(checked: boolean) {
     setSelected(checked ? filtered.map((tx) => tx.id) : []);
@@ -94,7 +98,7 @@ export function TransactionTable({
         <CardHeader>
           <CardTitle>Filtros</CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-4">
+        <CardContent className="grid gap-4 md:grid-cols-5">
           <div className="space-y-2">
             <Label>Conta</Label>
             <Select value={accountFilter} onValueChange={setAccountFilter}>
@@ -106,6 +110,23 @@ export function TransactionTable({
                 {accounts.map((account) => (
                   <SelectItem key={account.id} value={account.id}>
                     {account.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Cartão</Label>
+            <Select value={cardFilter} onValueChange={setCardFilter}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                {cards.map((card) => (
+                  <SelectItem key={card.id} value={card.id}>
+                    {card.name}
+                    {card.last_digits ? ` ·${card.last_digits}` : ""}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -183,6 +204,7 @@ export function TransactionTable({
                 <TableHead>Data</TableHead>
                 <TableHead>Descrição</TableHead>
                 <TableHead>Conta</TableHead>
+                <TableHead>Cartão</TableHead>
                 <TableHead>Categoria</TableHead>
                 <TableHead>Parcela</TableHead>
                 <TableHead className="text-right">Valor</TableHead>
@@ -200,6 +222,7 @@ export function TransactionTable({
                   <TableCell>{tx.transaction_date}</TableCell>
                   <TableCell>{tx.description}</TableCell>
                   <TableCell>{tx.account?.name ?? "-"}</TableCell>
+                  <TableCell>{tx.card?.name ?? "-"}</TableCell>
                   <TableCell>
                     {tx.category ? (
                       <div className="flex items-center gap-2">

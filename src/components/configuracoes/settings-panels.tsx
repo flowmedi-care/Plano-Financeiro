@@ -8,6 +8,7 @@ import {
   inviteToHousehold,
 } from "@/lib/actions/households";
 import { createAccount, deleteAccount } from "@/lib/actions/accounts";
+import { createCard, deleteCard } from "@/lib/actions/cards";
 import { createCategory } from "@/lib/actions/categories";
 import type { Account, Category, Household, HouseholdInvite } from "@/types/database";
 import { Button } from "@/components/ui/button";
@@ -41,6 +42,9 @@ export function SettingsPanels({
   const [accountBank, setAccountBank] = useState<"nubank" | "itau">("nubank");
   const [categoryName, setCategoryName] = useState("");
   const [categoryColor, setCategoryColor] = useState("#64748b");
+  const [cardAccountId, setCardAccountId] = useState(accounts[0]?.id ?? "");
+  const [cardName, setCardName] = useState("");
+  const [cardLastDigits, setCardLastDigits] = useState("");
 
   return (
     <div className="grid gap-6 lg:grid-cols-2">
@@ -50,22 +54,50 @@ export function SettingsPanels({
         </CardHeader>
         <CardContent className="space-y-4">
           {accounts.map((account) => (
-            <div key={account.id} className="flex items-center justify-between">
-              <span>
-                {account.name} ({account.bank})
-              </span>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() =>
-                  startTransition(async () => {
-                    await deleteAccount(account.id);
-                    toast.success("Conta removida");
-                  })
-                }
-              >
-                Remover
-              </Button>
+            <div key={account.id} className="rounded-md border p-3">
+              <div className="flex items-center justify-between">
+                <span className="font-medium">
+                  {account.name} ({account.bank})
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() =>
+                    startTransition(async () => {
+                      await deleteAccount(account.id);
+                      toast.success("Conta removida");
+                    })
+                  }
+                >
+                  Remover conta
+                </Button>
+              </div>
+              {(account.cards ?? []).length > 0 ? (
+                <div className="mt-2 space-y-1 pl-2">
+                  {account.cards!.map((card) => (
+                    <div key={card.id} className="flex items-center justify-between text-sm">
+                      <span>
+                        {card.name}
+                        {card.last_digits ? ` (final ${card.last_digits})` : ""}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() =>
+                          startTransition(async () => {
+                            await deleteCard(card.id);
+                            toast.success("Cartão removido");
+                          })
+                        }
+                      >
+                        Remover
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-2 pl-2 text-xs text-muted-foreground">Nenhum cartão cadastrado</p>
+              )}
             </div>
           ))}
           <div className="grid gap-2">
@@ -92,13 +124,59 @@ export function SettingsPanels({
                 startTransition(async () => {
                   await createAccount(formData);
                   setAccountName("");
-                  toast.success("Conta criada");
+                  toast.success("Conta criada com cartão principal");
                 });
               }}
             >
               Adicionar conta
             </Button>
           </div>
+
+          {accounts.length > 0 ? (
+            <div className="grid gap-2 border-t pt-4">
+              <Label>Adicionar cartão</Label>
+              <Select value={cardAccountId} onValueChange={setCardAccountId}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {accounts.map((account) => (
+                    <SelectItem key={account.id} value={account.id}>
+                      {account.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Input
+                placeholder="Nome do cartão (ex: Adicional)"
+                value={cardName}
+                onChange={(e) => setCardName(e.target.value)}
+              />
+              <Input
+                placeholder="Final 4 dígitos (ex: 6587)"
+                value={cardLastDigits}
+                onChange={(e) => setCardLastDigits(e.target.value)}
+                maxLength={4}
+              />
+              <Button
+                disabled={pending || !cardName || !cardAccountId}
+                onClick={() =>
+                  startTransition(async () => {
+                    await createCard({
+                      accountId: cardAccountId,
+                      name: cardName,
+                      lastDigits: cardLastDigits || undefined,
+                    });
+                    setCardName("");
+                    setCardLastDigits("");
+                    toast.success("Cartão adicionado");
+                  })
+                }
+              >
+                Adicionar cartão
+              </Button>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 

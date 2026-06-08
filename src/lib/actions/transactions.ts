@@ -18,7 +18,7 @@ export async function getTransactions(filters?: {
 
   let query = supabase
     .from("transactions")
-    .select("*, category:categories(*), account:accounts(*)")
+    .select("*, category:categories(*), account:accounts(*), card:cards(*)")
     .eq("is_payment", false)
     .order("transaction_date", { ascending: false });
 
