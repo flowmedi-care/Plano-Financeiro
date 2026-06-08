@@ -6,7 +6,7 @@ import { CardInstallmentGrid } from "@/components/planejamento/card-installment-
 import { applyEstimation } from "@/lib/actions/cash-flow";
 import type { MonthProjection } from "@/lib/cash-flow/project";
 import type { Card as CreditCard, EstimationMethod } from "@/types/database";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, formatReferenceMonthLabel } from "@/lib/utils";
 import { CashFlowBalanceChart } from "@/components/charts/cash-flow-balance";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -109,7 +109,9 @@ export function CashFlowProjectionTab({
             <TableBody>
               {projections.map((row) => (
                 <TableRow key={row.referenceMonth}>
-                  <TableCell className="font-medium">{row.referenceMonth}</TableCell>
+                  <TableCell className="font-medium">
+                    {formatReferenceMonthLabel(row.referenceMonth)}
+                  </TableCell>
                   <TableCell className="text-right">
                     {formatCurrency(row.incomeCents)}
                   </TableCell>

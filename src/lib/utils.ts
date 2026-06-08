@@ -29,6 +29,14 @@ export function toReferenceMonth(year: number, month: number): string {
   return `${year}-${String(month).padStart(2, "0")}`;
 }
 
+export function formatReferenceMonthLabel(referenceMonth: string): string {
+  const { year, month } = parseReferenceMonth(referenceMonth);
+  const date = new Date(year, month - 1, 1);
+  const monthName = new Intl.DateTimeFormat("pt-BR", { month: "long" }).format(date);
+  const capitalized = monthName.charAt(0).toUpperCase() + monthName.slice(1);
+  return `${referenceMonth} ${capitalized}`;
+}
+
 /** Aceita -4500, -4500,00 ou -4500.00 (negativos inclusos). */
 export function parseMoneyInputToCents(value: string): number {
   const trimmed = value.trim();
