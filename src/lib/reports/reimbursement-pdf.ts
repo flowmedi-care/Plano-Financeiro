@@ -1,9 +1,14 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import type { Person } from "@/types/database";
 import { formatCurrency } from "@/lib/utils";
-import type { CategorySpending, PersonOwedTransaction } from "@/lib/transactions/summary";
+import type { CategorySpending } from "@/lib/transactions/summary";
+import type { Transaction } from "@/types/database";
 import { renderPieChartToDataUrl } from "@/lib/reports/pie-chart-canvas";
+
+export interface ReportLineItem {
+  transaction: Transaction;
+  amountCents: number;
+}
 
 function formatDateBr(date: string): string {
   const [year, month, day] = date.split("-");
@@ -11,11 +16,11 @@ function formatDateBr(date: string): string {
 }
 
 function groupByCategory(
-  owedTransactions: PersonOwedTransaction[]
-): Map<string, PersonOwedTransaction[]> {
-  const groups = new Map<string, PersonOwedTransaction[]>();
+  items: ReportLineItem[]
+): Map<string, ReportLineItem[]> {
+  const groups = new Map<string, ReportLineItem[]>();
 
-  for (const item of owedTransactions) {
+  for (const item of items) {
     const key = item.transaction.category?.name ?? "Sem categoria";
     const list = groups.get(key) ?? [];
     list.push(item);
@@ -24,21 +29,40 @@ function groupByCategory(
 
   return new Map(
     [...groups.entries()].sort((a, b) => {
-      const totalA = a[1].reduce((sum, item) => sum + item.owedCents, 0);
-      const totalB = b[1].reduce((sum, item) => sum + item.owedCents, 0);
+      const totalA = a[1].reduce((sum, item) => sum + item.amountCents, 0);
+      const totalB = b[1].reduce((sum, item) => sum + item.amountCents, 0);
       return totalB - totalA;
     })
   );
 }
 
-export function generateReimbursementPdf(params: {
-  person: Person;
+function getFinalY(doc: jsPDF, fallback: number): number {
+  return (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable
+    ?.finalY ?? fallback;
+}
+
+export function generateSpendingReportPdf(params: {
+  recipientName: string;
+  reportTitle: string;
+  totalLabel: string;
+  amountColumnLabel: string;
   monthLabel: string;
-  owedTransactions: PersonOwedTransaction[];
+  lineItems: ReportLineItem[];
   categoryBreakdown: CategorySpending[];
+  filePrefix: string;
 }): void {
-  const { person, monthLabel, owedTransactions, categoryBreakdown } = params;
-  const totalOwed = owedTransactions.reduce((sum, item) => sum + item.owedCents, 0);
+  const {
+    recipientName,
+    reportTitle,
+    totalLabel,
+    amountColumnLabel,
+    monthLabel,
+    lineItems,
+    categoryBreakdown,
+    filePrefix,
+  } = params;
+
+  const totalAmount = lineItems.reduce((sum, item) => sum + item.amountCents, 0);
   const grandTotal = categoryBreakdown.reduce((sum, item) => sum + item.total, 0);
 
   const doc = new jsPDF({ unit: "mm", format: "a4" });
@@ -47,16 +71,16 @@ export function generateReimbursementPdf(params: {
 
   doc.setFontSize(18);
   doc.setFont("helvetica", "bold");
-  doc.text("Relatório de Reembolso", pageWidth / 2, y, { align: "center" });
+  doc.text(reportTitle, pageWidth / 2, y, { align: "center" });
   y += 10;
 
   doc.setFontSize(11);
   doc.setFont("helvetica", "normal");
-  doc.text(`Para: ${person.name}`, 14, y);
+  doc.text(`Para: ${recipientName}`, 14, y);
   y += 6;
   doc.text(`Período: ${monthLabel}`, 14, y);
   y += 6;
-  doc.text(`Total a pagar: ${formatCurrency(totalOwed)}`, 14, y);
+  doc.text(`${totalLabel}: ${formatCurrency(totalAmount)}`, 14, y);
   y += 10;
 
   doc.setFont("helvetica", "bold");
@@ -108,14 +132,14 @@ export function generateReimbursementPdf(params: {
     margin: { left: 14, right: 14 },
   });
 
-  y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
+  y = getFinalY(doc, y) + 10;
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
   doc.text("Transações", 14, y);
   y += 6;
 
-  const grouped = groupByCategory(owedTransactions);
+  const grouped = groupByCategory(lineItems);
 
   for (const [categoryName, items] of grouped) {
     if (y > 250) {
@@ -123,7 +147,7 @@ export function generateReimbursementPdf(params: {
       y = 18;
     }
 
-    const categoryTotal = items.reduce((sum, item) => sum + item.owedCents, 0);
+    const categoryTotal = items.reduce((sum, item) => sum + item.amountCents, 0);
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
@@ -132,13 +156,13 @@ export function generateReimbursementPdf(params: {
 
     autoTable(doc, {
       startY: y,
-      head: [["Data", "Descrição", "Conta", "Valor", "A pagar"]],
-      body: items.map(({ transaction: tx, owedCents }) => [
+      head: [["Data", "Descrição", "Conta", "Valor", amountColumnLabel]],
+      body: items.map(({ transaction: tx, amountCents }) => [
         formatDateBr(tx.transaction_date),
         tx.description,
         tx.account?.name ?? "-",
         formatCurrency(tx.amount_cents),
-        formatCurrency(owedCents),
+        formatCurrency(amountCents),
       ]),
       theme: "striped",
       headStyles: { fillColor: [71, 85, 105] },
@@ -146,7 +170,7 @@ export function generateReimbursementPdf(params: {
       margin: { left: 14, right: 14 },
     });
 
-    y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
+    y = getFinalY(doc, y) + 8;
   }
 
   if (y > 265) {
@@ -156,9 +180,9 @@ export function generateReimbursementPdf(params: {
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
-  doc.text(`Total: ${formatCurrency(totalOwed)}`, 14, y);
+  doc.text(`Total: ${formatCurrency(totalAmount)}`, 14, y);
 
-  const safeName = person.name.replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "-");
+  const safeName = recipientName.replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "-");
   const safeMonth = monthLabel.replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "-");
-  doc.save(`reembolso-${safeName}-${safeMonth}.pdf`);
+  doc.save(`${filePrefix}-${safeName}-${safeMonth}.pdf`);
 }

@@ -66,6 +66,84 @@ export function getPersonOwedTransactions(
     );
 }
 
+export interface SelfTransaction {
+  transaction: Transaction;
+  selfCents: number;
+}
+
+export function getSelfTransactions(transactions: Transaction[]): SelfTransaction[] {
+  return transactions
+    .map((tx) => {
+      const owedToOthers = (tx.splits ?? []).reduce(
+        (sum, split) => sum + split.amount_cents,
+        0
+      );
+      const selfCents = tx.amount_cents - owedToOthers;
+      if (selfCents <= 0) return null;
+      return { transaction: tx, selfCents };
+    })
+    .filter((item): item is SelfTransaction => item !== null)
+    .sort((a, b) =>
+      b.transaction.transaction_date.localeCompare(a.transaction.transaction_date)
+    );
+}
+
+export function computeSelfByCategory(
+  selfTransactions: SelfTransaction[]
+): CategorySpending[] {
+  const map = new Map<string, CategorySpending>();
+
+  for (const { transaction: tx, selfCents } of selfTransactions) {
+    const key = tx.category_id ?? "__uncategorized__";
+    const current = map.get(key) ?? {
+      name: tx.category?.name ?? "Sem categoria",
+      color: tx.category?.color ?? "#94a3b8",
+      total: 0,
+    };
+    current.total += selfCents;
+    map.set(key, current);
+  }
+
+  return Array.from(map.values()).sort((a, b) => b.total - a.total);
+}
+
+export interface CategoryTransactionGroup {
+  categoryId: string;
+  name: string;
+  color: string;
+  total: number;
+  transactions: Transaction[];
+}
+
+export function groupTransactionsByCategory(
+  transactions: Transaction[]
+): CategoryTransactionGroup[] {
+  const map = new Map<string, CategoryTransactionGroup>();
+
+  for (const tx of transactions) {
+    const categoryId = tx.category_id ?? "__uncategorized__";
+    const current = map.get(categoryId) ?? {
+      categoryId,
+      name: tx.category?.name ?? "Sem categoria",
+      color: tx.category?.color ?? "#94a3b8",
+      total: 0,
+      transactions: [],
+    };
+    current.total += tx.amount_cents;
+    current.transactions.push(tx);
+    map.set(categoryId, current);
+  }
+
+  return Array.from(map.values())
+    .map((group) => ({
+      ...group,
+      transactions: group.transactions.sort((a, b) =>
+        b.transaction_date.localeCompare(a.transaction_date)
+      ),
+    }))
+    .sort((a, b) => b.total - a.total);
+}
+
 export function computeOwedByCategory(
   owedTransactions: PersonOwedTransaction[]
 ): CategorySpending[] {

@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   computeOwedByCategory,
+  computeSelfByCategory,
   computeSpendingByCategory,
   computeTransactionSummary,
   getPersonOwedTransactions,
+  getSelfTransactions,
+  groupTransactionsByCategory,
 } from "@/lib/transactions/summary";
 import type { Person, Transaction } from "@/types/database";
 
@@ -32,12 +35,18 @@ const transactions = [
   {
     id: "1",
     amount_cents: 10000,
+    transaction_date: "2026-05-10",
+    category_id: "cat1",
+    category: { name: "Alimentação", color: "#f00" },
     account: { bank: "itau" as const, name: "Itaú" },
     splits: [{ person_id: "pai", amount_cents: 5000, person: people[0] }],
   },
   {
     id: "2",
     amount_cents: 5000,
+    transaction_date: "2026-05-05",
+    category_id: "cat2",
+    category: { name: "Lazer", color: "#0f0" },
     account: { bank: "nubank" as const, name: "Nubank" },
     splits: [{ person_id: "namorada", amount_cents: 2500, person: people[1] }],
   },
@@ -75,5 +84,29 @@ describe("computeOwedByCategory", () => {
     const owed = getPersonOwedTransactions(transactions, "pai");
     const result = computeOwedByCategory(owed);
     expect(result[0].total).toBe(5000);
+  });
+});
+
+describe("getSelfTransactions", () => {
+  it("returns self share after splits", () => {
+    const result = getSelfTransactions(transactions);
+    expect(result).toHaveLength(2);
+    expect(result.reduce((s, item) => s + item.selfCents, 0)).toBe(7500);
+  });
+});
+
+describe("computeSelfByCategory", () => {
+  it("groups self spending by category", () => {
+    const self = getSelfTransactions(transactions);
+    const result = computeSelfByCategory(self);
+    expect(result.reduce((s, item) => s + item.total, 0)).toBe(7500);
+  });
+});
+
+describe("groupTransactionsByCategory", () => {
+  it("groups transactions with totals", () => {
+    const result = groupTransactionsByCategory(transactions);
+    expect(result.length).toBeGreaterThan(0);
+    expect(result.reduce((s, g) => s + g.transactions.length, 0)).toBe(2);
   });
 });

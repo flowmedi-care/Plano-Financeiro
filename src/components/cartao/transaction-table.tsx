@@ -7,6 +7,7 @@ import { SplitDialog } from "@/components/cartao/split-dialog";
 import { TransactionSummary } from "@/components/cartao/transaction-summary";
 import { ReimbursementPdfExport } from "@/components/cartao/reimbursement-pdf-export";
 import { CategoryPieChart } from "@/components/charts/category-pie";
+import { CategoryTransactionsList } from "@/components/cartao/category-transactions-list";
 import {
   computeSpendingByCategory,
   getTransactionReferenceMonth,
@@ -348,6 +349,8 @@ export function TransactionTable({
       </Card>
 
       <CategoryPieChart data={spendingByCategory} />
+
+      <CategoryTransactionsList transactions={filtered} />
 
       <TransactionSummary
         transactions={filtered}
