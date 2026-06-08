@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, ReferenceLine } from "recharts";
-import { formatCurrency } from "@/lib/utils";
+import { buildYAxisScale } from "@/lib/charts/y-axis-scale";
+import { cn, formatCurrency } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,24 +21,16 @@ const Y_AXIS_STEPS = [
 
 type YAxisStep = (typeof Y_AXIS_STEPS)[number]["value"];
 
-function buildYAxisScale(values: number[], step: YAxisStep) {
-  const dataMin = values.length > 0 ? Math.min(...values) : 0;
-  const dataMax = values.length > 0 ? Math.max(...values) : 0;
-
-  let domainMin = Math.floor(Math.min(dataMin, 0) / step) * step;
-  let domainMax = Math.ceil(Math.max(dataMax, 0) / step) * step;
-
-  if (domainMin === domainMax) {
-    domainMin -= step;
-    domainMax += step;
+function formatAxisCurrency(value: number, step: YAxisStep): string {
+  if (step === 5000) {
+    return new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+      maximumFractionDigits: 0,
+    }).format(value);
   }
 
-  const ticks: number[] = [];
-  for (let tick = domainMin; tick <= domainMax; tick += step) {
-    ticks.push(tick);
-  }
-
-  return { domain: [domainMin, domainMax] as [number, number], ticks };
+  return formatCurrency(value * 100);
 }
 
 export function CashFlowBalanceChart({
@@ -83,15 +76,23 @@ export function CashFlowBalanceChart({
         </div>
       </CardHeader>
       <CardContent>
-        <ChartContainer config={config} className="h-[280px] w-full">
-          <BarChart data={chartData}>
+        <ChartContainer
+          config={config}
+          className={cn(
+            "w-full",
+            yAxisStep === 5000 ? "h-[380px]" : yAxisStep === 10000 ? "h-[320px]" : "h-[280px]"
+          )}
+        >
+          <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
             <CartesianGrid vertical={false} />
             <XAxis dataKey="month" tickLine={false} axisLine={false} />
             <YAxis
+              type="number"
               domain={yAxisScale.domain}
-              ticks={yAxisScale.ticks}
+              tickCount={yAxisScale.tickCount}
               allowDecimals={false}
-              tickFormatter={(v) => formatCurrency(Number(v) * 100)}
+              width={yAxisStep === 5000 ? 72 : 64}
+              tickFormatter={(value) => formatAxisCurrency(Number(value), yAxisStep)}
               tickLine={false}
               axisLine={false}
             />

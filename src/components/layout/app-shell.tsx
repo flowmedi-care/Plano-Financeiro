@@ -14,17 +14,17 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
   const households = await getHouseholds();
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex h-screen overflow-hidden">
       <Sidebar userEmail={user?.email ?? ""} />
-      <div className="flex flex-1 flex-col">
-        <header className="flex items-center justify-between border-b bg-card px-6 py-4">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <header className="flex shrink-0 items-center justify-between border-b bg-card px-6 py-4">
           <div>
             <p className="text-sm text-muted-foreground">Bem-vindo</p>
             <p className="font-medium">{profile?.full_name || user?.email}</p>
           </div>
           {profile ? <ScopeSwitcher profile={profile} households={households} /> : null}
         </header>
-        <main className="flex-1 overflow-auto p-6">{children}</main>
+        <main className="min-h-0 flex-1 overflow-y-auto p-6">{children}</main>
       </div>
     </div>
   );
