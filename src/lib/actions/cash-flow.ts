@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getActiveScope } from "@/lib/scope";
 import { getProfile } from "@/lib/actions/profile";
 import { getOrCreateBudgetMonth } from "@/lib/actions/budget";
-import { getInstallmentProjections } from "@/lib/actions/installments";
+import { getAllCards } from "@/lib/actions/cards";
 import { getTransactions } from "@/lib/actions/transactions";
 import {
   buildMonthRange,
@@ -328,6 +328,123 @@ function sumEntriesByType(
     .reduce((sum, e) => sum + (e.amount_cents ?? 0), 0);
 }
 
+function sumCardProjections(
+  entries: { type: string; amount_cents: number | null; card_id?: string | null }[]
+): number {
+  return entries
+    .filter((e) => e.type === "card_installment" && e.card_id)
+    .reduce((sum, e) => sum + (e.amount_cents ?? 0), 0);
+}
+
+export async function setCardProjection(params: {
+  cardId: string;
+  referenceMonth: string;
+  amountCents: number | null;
+}) {
+  const supabase = await createClient();
+  const [year, month] = params.referenceMonth.split("-").map(Number);
+  const budgetMonth = await getOrCreateBudgetMonth(year, month);
+
+  const { data: card } = await supabase
+    .from("cards")
+    .select("id, name, last_digits, account_id")
+    .eq("id", params.cardId)
+    .single();
+
+  if (!card) throw new Error("Cartão não encontrado");
+
+  if (!params.amountCents || params.amountCents <= 0) {
+    const { error } = await supabase
+      .from("cash_flow_entries")
+      .delete()
+      .eq("budget_month_id", budgetMonth.id)
+      .eq("card_id", params.cardId)
+      .eq("type", "card_installment");
+
+    if (error) throw new Error(error.message);
+    revalidatePath("/planejamento");
+    return;
+  }
+
+  const label = card.last_digits
+    ? `${card.name} ${card.last_digits}`
+    : card.name;
+
+  const { data: existing } = await supabase
+    .from("cash_flow_entries")
+    .select("id")
+    .eq("budget_month_id", budgetMonth.id)
+    .eq("card_id", params.cardId)
+    .eq("type", "card_installment")
+    .maybeSingle();
+
+  if (existing) {
+    const { error } = await supabase
+      .from("cash_flow_entries")
+      .update({
+        label,
+        amount_cents: params.amountCents,
+        account_id: card.account_id,
+        source: "manual",
+        is_confirmed: true,
+      })
+      .eq("id", existing.id);
+
+    if (error) throw new Error(error.message);
+  } else {
+    const { error } = await supabase.from("cash_flow_entries").insert({
+      budget_month_id: budgetMonth.id,
+      type: "card_installment",
+      label,
+      amount_cents: params.amountCents,
+      card_id: params.cardId,
+      account_id: card.account_id,
+      source: "manual",
+      is_confirmed: true,
+    });
+
+    if (error) throw new Error(error.message);
+  }
+
+  revalidatePath("/planejamento");
+}
+
+export async function getCardProjectionGrid(startYear: number, startMonth: number) {
+  const settings = await getOrCreateCashFlowSettings();
+  const months = buildMonthRange(
+    startYear,
+    startMonth,
+    settings.projection_months
+  );
+  const cards = await getAllCards();
+  const supabase = await createClient();
+
+  const values: Record<string, number> = {};
+  const totalsByMonth: Record<string, number> = {};
+
+  for (const ref of months) {
+    totalsByMonth[ref] = 0;
+    const [year, month] = ref.split("-").map(Number);
+    const budgetMonth = await getOrCreateBudgetMonth(year, month);
+
+    const { data: entries } = await supabase
+      .from("cash_flow_entries")
+      .select("card_id, amount_cents")
+      .eq("budget_month_id", budgetMonth.id)
+      .eq("type", "card_installment")
+      .not("card_id", "is", null);
+
+    for (const entry of entries ?? []) {
+      if (!entry.card_id) continue;
+      const cents = entry.amount_cents ?? 0;
+      values[`${entry.card_id}|${ref}`] = cents;
+      totalsByMonth[ref] += cents;
+    }
+  }
+
+  return { months, cards, values, totalsByMonth, projectionMonths: settings.projection_months };
+}
+
 export async function getCashFlowProjection(startYear: number, startMonth: number) {
   const settings = await getOrCreateCashFlowSettings();
   const monthRefs = buildMonthRange(
@@ -338,14 +455,7 @@ export async function getCashFlowProjection(startYear: number, startMonth: numbe
 
   const supabase = await createClient();
 
-  const [installments, transactions] = await Promise.all([
-    getInstallmentProjections(settings.projection_months),
-    getTransactions(),
-  ]);
-
-  const installmentMap = new Map(
-    installments.map((i) => [i.referenceMonth, i.amountCents])
-  );
+  const transactions = await getTransactions();
 
   const historicalByCategory = new Map<string, Map<string, number>>();
   for (const tx of transactions) {
@@ -370,8 +480,7 @@ export async function getCashFlowProjection(startYear: number, startMonth: numbe
 
     const incomeCents = sumEntriesByType(entries, "income");
     const fixedCents = sumEntriesByType(entries, "fixed_expense");
-    const manualCard = sumEntriesByType(entries, "card_installment");
-    const cardCents = (installmentMap.get(ref) ?? 0) + manualCard;
+    const cardCents = sumCardProjections(entries);
 
     monthInputs.push({
       referenceMonth: ref,
@@ -396,5 +505,7 @@ export async function getCashFlowProjection(startYear: number, startMonth: numbe
     defaultEstimationMethod: settings.default_estimation_method,
   });
 
-  return { settings, monthInputs, projections, installments };
+  const cardGrid = await getCardProjectionGrid(startYear, startMonth);
+
+  return { settings, monthInputs, projections, cardGrid };
 }

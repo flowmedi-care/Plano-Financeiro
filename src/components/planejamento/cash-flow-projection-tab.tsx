@@ -2,9 +2,10 @@
 
 import { useTransition } from "react";
 import { toast } from "sonner";
+import { CardInstallmentGrid } from "@/components/planejamento/card-installment-grid";
 import { applyEstimation } from "@/lib/actions/cash-flow";
 import type { MonthProjection } from "@/lib/cash-flow/project";
-import type { EstimationMethod } from "@/types/database";
+import type { Card as CreditCard, EstimationMethod } from "@/types/database";
 import { formatCurrency } from "@/lib/utils";
 import { CashFlowBalanceChart } from "@/components/charts/cash-flow-balance";
 import { Button } from "@/components/ui/button";
@@ -22,9 +23,16 @@ import { Badge } from "@/components/ui/badge";
 export function CashFlowProjectionTab({
   projections,
   defaultMethod,
+  cardGrid,
 }: {
   projections: MonthProjection[];
   defaultMethod: EstimationMethod;
+  cardGrid: {
+    months: string[];
+    cards: CreditCard[];
+    values: Record<string, number>;
+    totalsByMonth: Record<string, number>;
+  };
 }) {
   const [pending, startTransition] = useTransition();
 
@@ -144,6 +152,14 @@ export function CashFlowProjectionTab({
           </p>
         </CardContent>
       </Card>
+
+      <CardInstallmentGrid
+        months={cardGrid.months}
+        cards={cardGrid.cards}
+        values={cardGrid.values}
+        totalsByMonth={cardGrid.totalsByMonth}
+        readOnly
+      />
     </div>
   );
 }

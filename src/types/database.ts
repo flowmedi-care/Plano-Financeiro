@@ -213,6 +213,7 @@ export interface CashFlowEntry {
   amount_cents: number | null;
   category_id: string | null;
   account_id: string | null;
+  card_id: string | null;
   source: CashFlowEntrySource;
   is_confirmed: boolean;
   created_at: string;

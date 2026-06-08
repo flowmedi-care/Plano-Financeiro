@@ -1,5 +1,4 @@
 import { PlanejamentoPanel } from "@/components/planejamento/planejamento-panel";
-import { getAccounts } from "@/lib/actions/accounts";
 import { getBudgetDetails } from "@/lib/actions/budget";
 import { getCategories } from "@/lib/actions/categories";
 import {
@@ -19,10 +18,9 @@ export default async function PlanejamentoPage({
   const year = params.year ? Number(params.year) : now.getFullYear();
   const month = params.month ? Number(params.month) : now.getMonth() + 1;
 
-  const [budget, categories, accounts, settings, projection] = await Promise.all([
+  const [budget, categories, settings, projection] = await Promise.all([
     getBudgetDetails(year, month),
     getCategories(),
-    getAccounts(),
     getOrCreateCashFlowSettings(),
     getCashFlowProjection(year, month),
   ]);
@@ -48,10 +46,10 @@ export default async function PlanejamentoPage({
         entries={entries}
         variableExpenses={budget.variableExpenses}
         categories={categories}
-        accounts={accounts}
         settings={settings}
         cardCents={cardCents}
         projections={projection.projections}
+        cardGrid={projection.cardGrid}
       />
     </div>
   );

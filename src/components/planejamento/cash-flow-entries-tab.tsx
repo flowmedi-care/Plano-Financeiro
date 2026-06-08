@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
+import { CardInstallmentGrid } from "@/components/planejamento/card-installment-grid";
 import {
   addCashFlowEntry,
   deleteCashFlowEntry,
@@ -11,7 +12,7 @@ import {
 } from "@/lib/actions/cash-flow";
 import { calculateBudgetSummary } from "@/lib/budget/calculations";
 import type {
-  Account,
+  Card as CreditCard,
   CashFlowEntry,
   CashFlowSettings,
   Category,
@@ -23,14 +24,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-
 function parseMoneyToCents(value: string): number {
   const normalized = value.replace(/\./g, "").replace(",", ".");
   return Math.round(Number.parseFloat(normalized || "0") * 100);
@@ -41,17 +34,22 @@ export function CashFlowEntriesTab({
   entries,
   variableExpenses,
   categories,
-  accounts,
   settings,
   cardCents,
+  cardGrid,
 }: {
   budgetMonthId: string;
   entries: CashFlowEntry[];
   variableExpenses: BudgetVariableExpense[];
   categories: Category[];
-  accounts: Account[];
   settings: CashFlowSettings;
   cardCents: number;
+  cardGrid: {
+    months: string[];
+    cards: CreditCard[];
+    values: Record<string, number>;
+    totalsByMonth: Record<string, number>;
+  };
 }) {
   const [pending, startTransition] = useTransition();
   const [incomeLabel, setIncomeLabel] = useState("");
@@ -60,16 +58,12 @@ export function CashFlowEntriesTab({
   const [fixedLabel, setFixedLabel] = useState("");
   const [fixedAmount, setFixedAmount] = useState("");
   const [fixedRecurring, setFixedRecurring] = useState(true);
-  const [cardLabel, setCardLabel] = useState("");
-  const [cardAmount, setCardAmount] = useState("");
-  const [cardAccountId, setCardAccountId] = useState(accounts[0]?.id ?? "");
   const [openingBalance, setOpeningBalance] = useState(
     (settings.opening_balance_cents / 100).toFixed(2)
   );
 
   const incomes = entries.filter((e) => e.type === "income");
   const fixed = entries.filter((e) => e.type === "fixed_expense");
-  const manualCards = entries.filter((e) => e.type === "card_installment");
 
   const summary = calculateBudgetSummary({
     incomes,
@@ -93,6 +87,13 @@ export function CashFlowEntriesTab({
 
   return (
     <div className="space-y-6">
+      <CardInstallmentGrid
+        months={cardGrid.months}
+        cards={cardGrid.cards}
+        values={cardGrid.values}
+        totalsByMonth={cardGrid.totalsByMonth}
+      />
+
       <div className="grid gap-4 md:grid-cols-5">
         <Card>
           <CardHeader className="pb-2">
@@ -304,79 +305,6 @@ export function CashFlowEntriesTab({
                 <Label htmlFor="fixed-recurring">Tornar recorrente (mensal)</Label>
               </div>
             </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Parcelas de cartão (manual)</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Parcelas da importação entram automaticamente. Adicione aqui parcelas extras.
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {manualCards.map((item) => (
-              <div key={item.id} className="flex items-center justify-between">
-                <span>{item.label}</span>
-                <div className="flex items-center gap-2">
-                  <span>{formatCurrency(item.amount_cents ?? 0)}</span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() =>
-                      startTransition(() => deleteCashFlowEntry(item.id))
-                    }
-                  >
-                    Remover
-                  </Button>
-                </div>
-              </div>
-            ))}
-            <div className="grid gap-2 md:grid-cols-4">
-              <Input
-                placeholder="Descrição"
-                value={cardLabel}
-                onChange={(e) => setCardLabel(e.target.value)}
-              />
-              <Select value={cardAccountId} onValueChange={setCardAccountId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Conta" />
-                </SelectTrigger>
-                <SelectContent>
-                  {accounts.map((a) => (
-                    <SelectItem key={a.id} value={a.id}>
-                      {a.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Input
-                placeholder="Valor"
-                value={cardAmount}
-                onChange={(e) => setCardAmount(e.target.value)}
-              />
-              <Button
-                disabled={pending}
-                onClick={() =>
-                  startTransition(async () => {
-                    await addCashFlowEntry(budgetMonthId, {
-                      type: "card_installment",
-                      label: cardLabel,
-                      amountCents: parseMoneyToCents(cardAmount),
-                      accountId: cardAccountId,
-                    });
-                    setCardLabel("");
-                    setCardAmount("");
-                    toast.success("Parcela adicionada");
-                  })
-                }
-              >
-                Adicionar
-              </Button>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Automático este mês: {formatCurrency(cardCents - manualCards.reduce((s, e) => s + (e.amount_cents ?? 0), 0))}
-            </p>
           </CardContent>
         </Card>
 
