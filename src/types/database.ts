@@ -59,6 +59,25 @@ export interface Card {
   created_at: string;
 }
 
+export interface Person {
+  id: string;
+  user_id: string;
+  household_id: string | null;
+  scope: ScopeType;
+  name: string;
+  color: string;
+  created_at: string;
+}
+
+export interface TransactionSplit {
+  id: string;
+  transaction_id: string;
+  person_id: string;
+  amount_cents: number;
+  created_at: string;
+  person?: Person | null;
+}
+
 export interface Category {
   id: string;
   user_id: string | null;
@@ -119,6 +138,7 @@ export interface Transaction {
   category?: Category | null;
   account?: Account | null;
   card?: Card | null;
+  splits?: TransactionSplit[];
 }
 
 export interface BudgetMonth {

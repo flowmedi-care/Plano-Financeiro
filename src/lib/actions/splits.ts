@@ -1,0 +1,121 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { createClient } from "@/lib/supabase/server";
+import { getActiveScope } from "@/lib/scope";
+import { getProfile } from "@/lib/actions/profile";
+import { validateSplits, type SplitInput } from "@/lib/splits/calculate";
+
+export async function assignSplits(params: {
+  transactionIds: string[];
+  splits: SplitInput[];
+}) {
+  const supabase = await createClient();
+  const profile = await getProfile();
+  if (!profile) throw new Error("Não autenticado");
+
+  const { data: transactions } = await supabase
+    .from("transactions")
+    .select("id, amount_cents")
+    .in("id", params.transactionIds);
+
+  if (!transactions?.length) throw new Error("Transações não encontradas");
+
+  for (const tx of transactions) {
+    const validation = validateSplits(tx.amount_cents, params.splits);
+    if (!validation.valid) {
+      throw new Error(validation.error ?? "Divisão inválida");
+    }
+  }
+
+  await supabase
+    .from("transaction_splits")
+    .delete()
+    .in("transaction_id", params.transactionIds);
+
+  if (params.splits.length > 0) {
+    const rows = transactions.flatMap((tx) =>
+      params.splits.map((split) => ({
+        transaction_id: tx.id,
+        person_id: split.personId,
+        amount_cents: split.amountCents,
+      }))
+    );
+
+    const { error } = await supabase.from("transaction_splits").insert(rows);
+    if (error) throw new Error(error.message);
+  }
+
+  revalidatePath("/cartao/transacoes");
+  revalidatePath("/");
+}
+
+export async function clearSplits(transactionIds: string[]) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("transaction_splits")
+    .delete()
+    .in("transaction_id", transactionIds);
+
+  if (error) throw new Error(error.message);
+  revalidatePath("/cartao/transacoes");
+  revalidatePath("/");
+}
+
+export async function getAmountsOwedByPerson(referenceMonth?: string) {
+  const supabase = await createClient();
+  const profile = await getProfile();
+  if (!profile) return [];
+
+  const { scope, householdId } = getActiveScope(profile);
+
+  let txQuery = supabase
+    .from("transactions")
+    .select("id, transaction_date")
+    .eq("is_payment", false);
+
+  if (scope === "household" && householdId) {
+    txQuery = txQuery.eq("scope", "household").eq("household_id", householdId);
+  } else {
+    txQuery = txQuery.eq("scope", "personal").eq("user_id", profile.id);
+  }
+
+  if (referenceMonth) {
+    const [year, month] = referenceMonth.split("-").map(Number);
+    const start = `${year}-${String(month).padStart(2, "0")}-01`;
+    const endMonth = month === 12 ? 1 : month + 1;
+    const endYear = month === 12 ? year + 1 : year;
+    const end = `${endYear}-${String(endMonth).padStart(2, "0")}-01`;
+    txQuery = txQuery.gte("transaction_date", start).lt("transaction_date", end);
+  }
+
+  const { data: transactions } = await txQuery;
+  if (!transactions?.length) return [];
+
+  const txIds = transactions.map((t) => t.id);
+
+  const { data: splits, error } = await supabase
+    .from("transaction_splits")
+    .select("amount_cents, person:people(id, name, color)")
+    .in("transaction_id", txIds);
+
+  if (error) throw new Error(error.message);
+
+  const map = new Map<string, { name: string; color: string; total: number }>();
+
+  for (const split of splits ?? []) {
+    const rawPerson = split.person;
+    const person = Array.isArray(rawPerson) ? rawPerson[0] : rawPerson;
+    if (!person?.id) continue;
+
+    const current = map.get(person.id) ?? {
+      name: person.name,
+      color: person.color,
+      total: 0,
+    };
+    current.total += split.amount_cents;
+    map.set(person.id, current);
+  }
+
+  return Array.from(map.values()).sort((a, b) => b.total - a.total);
+}

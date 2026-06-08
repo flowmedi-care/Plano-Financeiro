@@ -28,6 +28,7 @@ Se aparecer o erro *"No Output Directory named public"*, vá em **Project Settin
    - `supabase/migrations/001_initial_schema.sql`
    - `supabase/migrations/002_fix_signup_trigger.sql`
    - `supabase/migrations/003_add_cards.sql`
+   - `supabase/migrations/004_people_and_splits.sql`
 3. Copie `.env.example` para `.env.local` e preencha:
 
 ```env
@@ -58,6 +59,7 @@ Confira também:
 
 - **Importação**: CSV Nubank e PDF Itaú com preview antes de confirmar
 - **Classificação**: bulk classify + regras por estabelecimento para auto-categorização
+- **Reembolso por pessoa**: atribuir/dividir gastos para cobrar Pai, Namorada, etc. (sem alterar totais de categoria)
 - **Planejamento**: receitas, despesas fixas, metas variáveis e limites de cartão
 - **Dashboard**: gráficos de categorias, comparação planejado vs. realizado, projeção de parcelas
 - **Multi-usuário**: dados pessoais + grupos compartilhados (households)

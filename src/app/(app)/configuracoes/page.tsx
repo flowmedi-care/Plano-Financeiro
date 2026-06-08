@@ -2,13 +2,15 @@ import { SettingsPanels } from "@/components/configuracoes/settings-panels";
 import { getAccounts } from "@/lib/actions/accounts";
 import { getCategories } from "@/lib/actions/categories";
 import { getHouseholds, getPendingInvites } from "@/lib/actions/households";
+import { getPeople } from "@/lib/actions/people";
 
 export default async function ConfiguracoesPage() {
-  const [accounts, categories, households, invites] = await Promise.all([
+  const [accounts, categories, households, invites, people] = await Promise.all([
     getAccounts(),
     getCategories(),
     getHouseholds(),
     getPendingInvites(),
+    getPeople(),
   ]);
 
   return (
@@ -24,6 +26,7 @@ export default async function ConfiguracoesPage() {
         categories={categories}
         households={households}
         invites={invites}
+        people={people}
       />
     </div>
   );

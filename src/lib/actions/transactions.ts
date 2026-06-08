@@ -18,7 +18,7 @@ export async function getTransactions(filters?: {
 
   let query = supabase
     .from("transactions")
-    .select("*, category:categories(*), account:accounts(*), card:cards(*)")
+    .select("*, category:categories(*), account:accounts(*), card:cards(*), splits:transaction_splits(*, person:people(*))")
     .eq("is_payment", false)
     .order("transaction_date", { ascending: false });
 
@@ -124,12 +124,13 @@ export async function getSpendingByCategory(referenceMonth?: string) {
   const transactions = await getTransactions({ referenceMonth });
   const map = new Map<string, { name: string; color: string; total: number }>();
 
+  const UNCATEGORIZED_KEY = "__uncategorized__";
+
   for (const tx of transactions) {
-    if (!tx.category_id || !tx.category) continue;
-    const key = tx.category_id;
+    const key = tx.category_id ?? UNCATEGORIZED_KEY;
     const current = map.get(key) ?? {
-      name: tx.category.name,
-      color: tx.category.color,
+      name: tx.category?.name ?? "Sem categoria",
+      color: tx.category?.color ?? "#94a3b8",
       total: 0,
     };
     current.total += tx.amount_cents;

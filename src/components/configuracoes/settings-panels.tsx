@@ -10,7 +10,8 @@ import {
 import { createAccount, deleteAccount } from "@/lib/actions/accounts";
 import { createCard, deleteCard } from "@/lib/actions/cards";
 import { createCategory } from "@/lib/actions/categories";
-import type { Account, Category, Household, HouseholdInvite } from "@/types/database";
+import { createPerson, deletePerson } from "@/lib/actions/people";
+import type { Account, Category, Household, HouseholdInvite, Person } from "@/types/database";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -28,11 +29,13 @@ export function SettingsPanels({
   categories,
   households,
   invites,
+  people,
 }: {
   accounts: Account[];
   categories: Category[];
   households: Household[];
   invites: HouseholdInvite[];
+  people: Person[];
 }) {
   const [pending, startTransition] = useTransition();
   const [householdName, setHouseholdName] = useState("");
@@ -45,6 +48,8 @@ export function SettingsPanels({
   const [cardAccountId, setCardAccountId] = useState(accounts[0]?.id ?? "");
   const [cardName, setCardName] = useState("");
   const [cardLastDigits, setCardLastDigits] = useState("");
+  const [personName, setPersonName] = useState("");
+  const [personColor, setPersonColor] = useState("#8b5cf6");
 
   return (
     <div className="grid gap-6 lg:grid-cols-2">
@@ -177,6 +182,64 @@ export function SettingsPanels({
               </Button>
             </div>
           ) : null}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Pessoas (reembolso)</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Cadastre quem deve reembolsar gastos (ex: Pai, Namorada). Isso não altera suas categorias nem seu total de gastos.
+          </p>
+          {people.map((person) => (
+            <div key={person.id} className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span
+                  className="inline-block h-3 w-3 rounded-full"
+                  style={{ backgroundColor: person.color }}
+                />
+                <span>{person.name}</span>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  startTransition(async () => {
+                    await deletePerson(person.id);
+                    toast.success("Pessoa removida");
+                  })
+                }
+              >
+                Remover
+              </Button>
+            </div>
+          ))}
+          <div className="grid gap-2">
+            <Input
+              placeholder="Nome (ex: Pai, Namorada)"
+              value={personName}
+              onChange={(e) => setPersonName(e.target.value)}
+            />
+            <Input
+              type="color"
+              value={personColor}
+              onChange={(e) => setPersonColor(e.target.value)}
+            />
+            <Button
+              disabled={pending || !personName}
+              onClick={() =>
+                startTransition(async () => {
+                  await createPerson(personName, personColor);
+                  setPersonName("");
+                  toast.success("Pessoa adicionada");
+                })
+              }
+            >
+              Adicionar pessoa
+            </Button>
+          </div>
         </CardContent>
       </Card>
 

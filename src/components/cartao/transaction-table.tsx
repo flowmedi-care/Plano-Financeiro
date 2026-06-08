@@ -3,7 +3,8 @@
 import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { classifyTransactions } from "@/lib/actions/transactions";
-import type { Account, Card as CreditCard, Category, Transaction } from "@/types/database";
+import { SplitDialog } from "@/components/cartao/split-dialog";
+import type { Account, Card as CreditCard, Category, Person, Transaction } from "@/types/database";
 import { formatCurrency } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,13 +32,16 @@ export function TransactionTable({
   categories,
   accounts,
   cards,
+  people,
 }: {
   transactions: Transaction[];
   categories: Category[];
   accounts: Account[];
   cards: CreditCard[];
+  people: Person[];
 }) {
   const [selected, setSelected] = useState<string[]>([]);
+  const [splitDialogOpen, setSplitDialogOpen] = useState(false);
   const [categoryId, setCategoryId] = useState(categories[0]?.id ?? "");
   const [remember, setRemember] = useState(true);
   const [accountFilter, setAccountFilter] = useState("all");
@@ -186,9 +190,19 @@ export function TransactionTable({
             <Button onClick={handleClassify} disabled={pending}>
               Aplicar categoria
             </Button>
+            <Button variant="outline" onClick={() => setSplitDialogOpen(true)} disabled={pending}>
+              Atribuir reembolso
+            </Button>
           </CardContent>
         </Card>
       ) : null}
+
+      <SplitDialog
+        open={splitDialogOpen}
+        onOpenChange={setSplitDialogOpen}
+        transactions={filtered.filter((tx) => selected.includes(tx.id))}
+        people={people}
+      />
 
       <Card>
         <CardContent className="p-0">
@@ -206,6 +220,7 @@ export function TransactionTable({
                 <TableHead>Conta</TableHead>
                 <TableHead>Cartão</TableHead>
                 <TableHead>Categoria</TableHead>
+                <TableHead>Reembolso</TableHead>
                 <TableHead>Parcela</TableHead>
                 <TableHead className="text-right">Valor</TableHead>
               </TableRow>
@@ -237,6 +252,25 @@ export function TransactionTable({
                       </div>
                     ) : (
                       <Badge variant="warning">Sem categoria</Badge>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {tx.splits && tx.splits.length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {tx.splits.map((split) => (
+                          <Badge
+                            key={split.id}
+                            variant="secondary"
+                            style={{
+                              borderColor: split.person?.color,
+                            }}
+                          >
+                            {split.person?.name} {formatCurrency(split.amount_cents)}
+                          </Badge>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
                     )}
                   </TableCell>
                   <TableCell>
