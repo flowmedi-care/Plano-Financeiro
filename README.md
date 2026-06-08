@@ -32,14 +32,24 @@ NEXT_PUBLIC_SUPABASE_URL=sua_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=sua_chave
 ```
 
-4. Instale e rode:
+4. Se o cadastro retornar erro 500, execute também `supabase/migrations/002_fix_signup_trigger.sql`
+
+5. Instale e rode:
 
 ```bash
 npm install
 npm run dev
 ```
 
-5. Acesse [http://localhost:3000](http://localhost:3000)
+6. Acesse [http://localhost:3000](http://localhost:3000)
+
+### Erro 500 ao criar usuário
+
+Causa mais comum: trigger `handle_new_user` sem permissões corretas. Rode `002_fix_signup_trigger.sql` no SQL Editor.
+
+Confira também:
+- **NEXT_PUBLIC_SUPABASE_ANON_KEY** deve ser a chave `anon` / `publishable` (não a `service_role` / `secret`)
+- A migration `001_initial_schema.sql` foi executada por completo
 
 ## Funcionalidades
 
