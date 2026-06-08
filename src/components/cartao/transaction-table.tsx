@@ -1,0 +1,235 @@
+"use client";
+
+import { useMemo, useState, useTransition } from "react";
+import { toast } from "sonner";
+import { classifyTransactions } from "@/lib/actions/transactions";
+import type { Account, Category, Transaction } from "@/types/database";
+import { formatCurrency } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+
+export function TransactionTable({
+  transactions,
+  categories,
+  accounts,
+}: {
+  transactions: Transaction[];
+  categories: Category[];
+  accounts: Account[];
+}) {
+  const [selected, setSelected] = useState<string[]>([]);
+  const [categoryId, setCategoryId] = useState(categories[0]?.id ?? "");
+  const [remember, setRemember] = useState(true);
+  const [accountFilter, setAccountFilter] = useState("all");
+  const [monthFilter, setMonthFilter] = useState("all");
+  const [uncategorizedOnly, setUncategorizedOnly] = useState(false);
+  const [pending, startTransition] = useTransition();
+
+  const months = useMemo(() => {
+    const set = new Set(
+      transactions.map((tx) => tx.transaction_date.slice(0, 7))
+    );
+    return Array.from(set).sort().reverse();
+  }, [transactions]);
+
+  const filtered = useMemo(() => {
+    return transactions.filter((tx) => {
+      if (accountFilter !== "all" && tx.account_id !== accountFilter) return false;
+      if (monthFilter !== "all" && !tx.transaction_date.startsWith(monthFilter)) return false;
+      if (uncategorizedOnly && tx.category_id) return false;
+      return true;
+    });
+  }, [transactions, accountFilter, monthFilter, uncategorizedOnly]);
+
+  function toggleAll(checked: boolean) {
+    setSelected(checked ? filtered.map((tx) => tx.id) : []);
+  }
+
+  function toggleOne(id: string, checked: boolean) {
+    setSelected((prev) =>
+      checked ? [...prev, id] : prev.filter((item) => item !== id)
+    );
+  }
+
+  function handleClassify() {
+    if (!categoryId || selected.length === 0) return;
+
+    startTransition(async () => {
+      try {
+        await classifyTransactions({
+          transactionIds: selected,
+          categoryId,
+          remember,
+          accountId: accountFilter !== "all" ? accountFilter : undefined,
+        });
+        toast.success("Transações classificadas");
+        setSelected([]);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Erro ao classificar");
+      }
+    });
+  }
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>Filtros</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-4">
+          <div className="space-y-2">
+            <Label>Conta</Label>
+            <Select value={accountFilter} onValueChange={setAccountFilter}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas</SelectItem>
+                {accounts.map((account) => (
+                  <SelectItem key={account.id} value={account.id}>
+                    {account.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Mês</Label>
+            <Select value={monthFilter} onValueChange={setMonthFilter}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                {months.map((month) => (
+                  <SelectItem key={month} value={month}>
+                    {month}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-end gap-2">
+            <Checkbox
+              id="uncategorized"
+              checked={uncategorizedOnly}
+              onCheckedChange={(checked) => setUncategorizedOnly(Boolean(checked))}
+            />
+            <Label htmlFor="uncategorized">Somente sem categoria</Label>
+          </div>
+        </CardContent>
+      </Card>
+
+      {selected.length > 0 ? (
+        <Card>
+          <CardContent className="flex flex-wrap items-center gap-4 py-4">
+            <span className="text-sm font-medium">{selected.length} selecionadas</span>
+            <Select value={categoryId} onValueChange={setCategoryId}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Categoria" />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map((category) => (
+                  <SelectItem key={category.id} value={category.id}>
+                    {category.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="remember"
+                checked={remember}
+                onCheckedChange={(checked) => setRemember(Boolean(checked))}
+              />
+              <Label htmlFor="remember">Lembrar para este estabelecimento</Label>
+            </div>
+            <Button onClick={handleClassify} disabled={pending}>
+              Aplicar categoria
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      <Card>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-12">
+                  <Checkbox
+                    checked={selected.length === filtered.length && filtered.length > 0}
+                    onCheckedChange={(checked) => toggleAll(Boolean(checked))}
+                  />
+                </TableHead>
+                <TableHead>Data</TableHead>
+                <TableHead>Descrição</TableHead>
+                <TableHead>Conta</TableHead>
+                <TableHead>Categoria</TableHead>
+                <TableHead>Parcela</TableHead>
+                <TableHead className="text-right">Valor</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filtered.map((tx) => (
+                <TableRow key={tx.id}>
+                  <TableCell>
+                    <Checkbox
+                      checked={selected.includes(tx.id)}
+                      onCheckedChange={(checked) => toggleOne(tx.id, Boolean(checked))}
+                    />
+                  </TableCell>
+                  <TableCell>{tx.transaction_date}</TableCell>
+                  <TableCell>{tx.description}</TableCell>
+                  <TableCell>{tx.account?.name ?? "-"}</TableCell>
+                  <TableCell>
+                    {tx.category ? (
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="inline-block h-2 w-2 rounded-full"
+                          style={{ backgroundColor: tx.category.color }}
+                        />
+                        <span>{tx.category.name}</span>
+                        {tx.auto_categorized ? (
+                          <Badge variant="success">auto</Badge>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <Badge variant="warning">Sem categoria</Badge>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {tx.installment_current && tx.installment_total
+                      ? `${tx.installment_current}/${tx.installment_total}`
+                      : "-"}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {formatCurrency(tx.amount_cents)}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
