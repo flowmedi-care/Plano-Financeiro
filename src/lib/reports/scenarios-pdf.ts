@@ -6,6 +6,9 @@ import type { Card, CashFlowSettings } from "@/types/database";
 import { formatCurrency, formatReferenceMonthLabel } from "@/lib/utils";
 import { renderBarChartToDataUrl } from "@/lib/reports/bar-chart-canvas";
 
+const RED: [number, number, number] = [220, 38, 38];
+const BLACK: [number, number, number] = [15, 23, 42];
+
 function getFinalY(doc: jsPDF, fallback: number): number {
   return (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable
     ?.finalY ?? fallback;
@@ -13,6 +16,42 @@ function getFinalY(doc: jsPDF, fallback: number): number {
 
 function cardLabel(card: Card): string {
   return card.last_digits ? `${card.name} ${card.last_digits}` : card.name;
+}
+
+function writeCurrencyLine(
+  doc: jsPDF,
+  label: string,
+  cents: number,
+  x: number,
+  y: number
+) {
+  doc.setTextColor(...(cents < 0 ? RED : BLACK));
+  doc.text(`${label}: ${formatCurrency(cents)}`, x, y);
+  doc.setTextColor(...BLACK);
+}
+
+function cashFlowTableStyles(
+  projections: MonthProjection[]
+): Parameters<typeof autoTable>[1] {
+  return {
+    theme: "striped",
+    headStyles: { fillColor: [71, 85, 105] },
+    styles: { fontSize: 7, cellPadding: 1.5 },
+    margin: { left: 14, right: 14 },
+    didParseCell: (data) => {
+      if (data.section !== "body") return;
+
+      const row = projections[data.row.index];
+      if (!row) return;
+
+      if (data.column.index === 5 && row.monthBalanceCents < 0) {
+        data.cell.styles.textColor = RED;
+      }
+      if (data.column.index === 6 && row.cumulativeBalanceCents < 0) {
+        data.cell.styles.textColor = RED;
+      }
+    },
+  };
 }
 
 export function generateScenariosReportPdf(params: {
@@ -33,17 +72,20 @@ export function generateScenariosReportPdf(params: {
   const { settings, monthInputs, scenarios, cardGrid } = params;
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
+  const contentWidth = pageWidth - 28;
   let y = 18;
 
   doc.setFontSize(18);
   doc.setFont("helvetica", "bold");
+  doc.setTextColor(...BLACK);
   doc.text("Relatório de Cenários — Fluxo de Caixa", pageWidth / 2, y, { align: "center" });
   y += 12;
 
   doc.setFontSize(11);
   doc.setFont("helvetica", "normal");
-  doc.text(`Saldo inicial: ${formatCurrency(settings.opening_balance_cents)}`, 14, y);
+  writeCurrencyLine(doc, "Saldo inicial", settings.opening_balance_cents, 14, y);
   y += 6;
+  doc.setTextColor(...BLACK);
   doc.text(`Horizonte: ${settings.projection_months} meses`, 14, y);
   y += 10;
 
@@ -99,7 +141,10 @@ export function generateScenariosReportPdf(params: {
   autoTable(doc, {
     startY: y,
     head: [cardHead],
-    body: cardBody.length > 0 ? cardBody : [["Nenhum cartão cadastrado", ...cardGrid.months.map(() => "—")]],
+    body:
+      cardBody.length > 0
+        ? cardBody
+        : [["Nenhum cartão cadastrado", ...cardGrid.months.map(() => "—")]],
     theme: "grid",
     headStyles: { fillColor: [100, 116, 139] },
     styles: { fontSize: 7, cellPadding: 1.5 },
@@ -112,12 +157,14 @@ export function generateScenariosReportPdf(params: {
 
     doc.setFontSize(16);
     doc.setFont("helvetica", "bold");
+    doc.setTextColor(...BLACK);
     doc.text(`Cenário: ${scenario.name}`, 14, y);
     y += 8;
 
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
     if (scenario.type === "fixed") {
+      doc.setTextColor(...BLACK);
       doc.text(
         `Despesas variáveis: ${formatCurrency(scenario.fixed_amount_cents ?? 0)}/mês (fixo)`,
         14,
@@ -146,27 +193,31 @@ export function generateScenariosReportPdf(params: {
 
     const firstPositive = projections.find((p) => p.cumulativeBalanceCents > 0);
     if (firstPositive) {
+      doc.setTextColor(...BLACK);
       doc.text(
-        `Saldo acumulado positivo a partir de ${formatReferenceMonthLabel(firstPositive.referenceMonth)} (${formatCurrency(firstPositive.cumulativeBalanceCents)})`,
+        `Saldo acumulado positivo a partir de ${formatReferenceMonthLabel(firstPositive.referenceMonth)} (${formatCurrency(firstPositive.cumulativeBalanceCents)}).`,
         14,
         y
       );
     } else {
+      doc.setTextColor(...RED);
       doc.text("Saldo acumulado não fica positivo no horizonte.", 14, y);
+      doc.setTextColor(...BLACK);
     }
-    y += 8;
+    y += 10;
 
     const chartImage = renderBarChartToDataUrl(
       projections.map((p) => ({
         label: p.referenceMonth.slice(5) + "/" + p.referenceMonth.slice(2, 4),
         value: p.cumulativeBalanceCents / 100,
       })),
-      { width: 520, height: 200, step: 5000 }
+      { width: 900, height: 340, step: 5000, pixelRatio: 3 }
     );
 
     if (chartImage) {
-      doc.addImage(chartImage, "PNG", 14, y, 180, 70);
-      y += 76;
+      const chartHeight = contentWidth * (340 / 900);
+      doc.addImage(chartImage, "PNG", 14, y, contentWidth, chartHeight, undefined, "NONE");
+      y += chartHeight + 8;
     }
 
     doc.setFont("helvetica", "bold");
@@ -185,10 +236,7 @@ export function generateScenariosReportPdf(params: {
         formatCurrency(row.monthBalanceCents),
         formatCurrency(row.cumulativeBalanceCents),
       ]),
-      theme: "striped",
-      headStyles: { fillColor: [71, 85, 105] },
-      styles: { fontSize: 7, cellPadding: 1.5 },
-      margin: { left: 14, right: 14 },
+      ...cashFlowTableStyles(projections),
     });
   }
 
