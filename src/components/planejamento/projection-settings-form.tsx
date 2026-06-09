@@ -15,15 +15,9 @@ export function ProjectionSettingsForm({ settings }: { settings: CashFlowSetting
   const [openingBalance, setOpeningBalance] = useState(
     centsToMoneyInput(settings.opening_balance_cents)
   );
-  const [variableProjection, setVariableProjection] = useState(
-    centsToMoneyInput(settings.monthly_variable_projection_cents ?? 0)
-  );
 
   useEffect(() => {
     setOpeningBalance(centsToMoneyInput(settings.opening_balance_cents));
-    setVariableProjection(
-      centsToMoneyInput(settings.monthly_variable_projection_cents ?? 0)
-    );
   }, [settings]);
 
   function handleSave() {
@@ -31,9 +25,8 @@ export function ProjectionSettingsForm({ settings }: { settings: CashFlowSetting
       try {
         await updateCashFlowSettings({
           openingBalanceCents: parseMoneyInputToCents(openingBalance),
-          monthlyVariableProjectionCents: parseMoneyInputToCents(variableProjection),
         });
-        toast.success("Configurações da projeção salvas");
+        toast.success("Saldo inicial atualizado");
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Erro ao salvar");
       }
@@ -45,8 +38,8 @@ export function ProjectionSettingsForm({ settings }: { settings: CashFlowSetting
       <CardHeader>
         <CardTitle>Configurações da projeção</CardTitle>
         <p className="text-sm text-muted-foreground">
-          Saldo inicial: {formatCurrency(settings.opening_balance_cents)} · Variáveis/mês:{" "}
-          {formatCurrency(settings.monthly_variable_projection_cents ?? 0)}
+          Saldo inicial: {formatCurrency(settings.opening_balance_cents)} · Despesas variáveis são
+          definidas por cenário na aba Fluxo de caixa.
         </p>
       </CardHeader>
       <CardContent className="flex flex-wrap items-end gap-4">
@@ -59,18 +52,6 @@ export function ProjectionSettingsForm({ settings }: { settings: CashFlowSetting
             placeholder="0,00"
           />
           <p className="text-xs text-muted-foreground">Aceita valores negativos (ex: -4500,00)</p>
-        </div>
-        <div className="space-y-2">
-          <Label>Despesas variáveis (projeção mensal)</Label>
-          <Input
-            className="w-[200px]"
-            value={variableProjection}
-            onChange={(e) => setVariableProjection(e.target.value)}
-            placeholder="0,00"
-          />
-          <p className="text-xs text-muted-foreground">
-            Valor aplicado em cada mês quando não houver lançamento por categoria
-          </p>
         </div>
         <Button onClick={handleSave} disabled={pending}>
           {pending ? "Salvando..." : "Salvar"}

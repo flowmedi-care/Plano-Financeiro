@@ -5,6 +5,7 @@ import { MonthNavigator } from "@/components/planejamento/month-navigator";
 import { CashFlowEntriesTab } from "@/components/planejamento/cash-flow-entries-tab";
 import { CashFlowProjectionTab } from "@/components/planejamento/cash-flow-projection-tab";
 import { ProjectionSettingsForm } from "@/components/planejamento/projection-settings-form";
+import type { ScenarioProjectionResult } from "@/components/planejamento/scenario-tabs";
 import type {
   Card,
   CashFlowEntry,
@@ -12,7 +13,7 @@ import type {
   Category,
   BudgetVariableExpense,
 } from "@/types/database";
-import type { MonthProjection } from "@/lib/cash-flow/project";
+import type { MonthInput } from "@/lib/cash-flow/project";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -25,7 +26,8 @@ export function PlanejamentoPanel({
   categories,
   settings,
   cardCents,
-  projections,
+  monthInputs,
+  scenarios,
   cardGrid,
 }: {
   year: number;
@@ -36,7 +38,8 @@ export function PlanejamentoPanel({
   categories: Category[];
   settings: CashFlowSettings;
   cardCents: number;
-  projections: MonthProjection[];
+  monthInputs: MonthInput[];
+  scenarios: ScenarioProjectionResult[];
   cardGrid: {
     months: string[];
     cards: Card[];
@@ -81,8 +84,9 @@ export function PlanejamentoPanel({
 
       <div className={cn(tab === "flow" ? "block" : "hidden")}>
         <CashFlowProjectionTab
-          projections={projections}
-          defaultMethod={settings.default_estimation_method}
+          settings={settings}
+          monthInputs={monthInputs}
+          scenarios={scenarios}
           cardGrid={cardGrid}
         />
       </div>

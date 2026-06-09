@@ -3,9 +3,11 @@ import { getBudgetDetails } from "@/lib/actions/budget";
 import { getCategories } from "@/lib/actions/categories";
 import {
   getCashFlowEntries,
-  getCashFlowProjection,
+  loadCashFlowProjectionData,
   getOrCreateCashFlowSettings,
 } from "@/lib/actions/cash-flow";
+import { listProjectionScenarios } from "@/lib/actions/projection-scenarios";
+import { computeScenarioProjections } from "@/lib/cash-flow/compute-projection";
 import { toReferenceMonth } from "@/lib/utils";
 
 export default async function PlanejamentoPage({
@@ -18,24 +20,37 @@ export default async function PlanejamentoPage({
   const year = params.year ? Number(params.year) : now.getFullYear();
   const month = params.month ? Number(params.month) : now.getMonth() + 1;
 
-  const [budget, categories, settings, projection] = await Promise.all([
+  const [budget, categories, settings, projectionData, scenarios] = await Promise.all([
     getBudgetDetails(year, month),
     getCategories(),
     getOrCreateCashFlowSettings(),
-    getCashFlowProjection(year, month),
+    loadCashFlowProjectionData(year, month),
+    listProjectionScenarios(),
   ]);
 
   const entries = await getCashFlowEntries(budget.budgetMonth.id, year, month);
   const ref = toReferenceMonth(year, month);
-  const monthProj = projection.projections.find((p) => p.referenceMonth === ref);
-  const cardCents = monthProj?.cardCents ?? 0;
+  const monthInput = projectionData.monthInputs.find((p) => p.referenceMonth === ref);
+  const cardCents = monthInput?.cardCents ?? 0;
+
+  const scenarioResults = scenarios.map((scenario) => {
+    const monthValues: Record<string, number> = {};
+    for (const row of scenario.monthValues) {
+      monthValues[row.reference_month] = row.amount_cents;
+    }
+    return {
+      scenario,
+      projections: computeScenarioProjections(projectionData, scenario),
+      monthValues,
+    };
+  });
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Planejamento</h1>
         <p className="text-muted-foreground">
-          Fluxo de caixa com receitas recorrentes, parcelas de cartão e estimativa de gastos
+          Fluxo de caixa com receitas recorrentes, parcelas de cartão e cenários de despesas
           variáveis.
         </p>
       </div>
@@ -48,8 +63,9 @@ export default async function PlanejamentoPage({
         categories={categories}
         settings={settings}
         cardCents={cardCents}
-        projections={projection.projections}
-        cardGrid={projection.cardGrid}
+        monthInputs={projectionData.monthInputs}
+        scenarios={scenarioResults}
+        cardGrid={projectionData.cardGrid}
       />
     </div>
   );

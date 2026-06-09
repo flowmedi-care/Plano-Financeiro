@@ -7,11 +7,11 @@ import { getProfile } from "@/lib/actions/profile";
 import { getOrCreateBudgetMonth } from "@/lib/actions/budget";
 import { getAllCards } from "@/lib/actions/cards";
 import { getTransactions } from "@/lib/actions/transactions";
+import { buildMonthRange, type MonthInput } from "@/lib/cash-flow/project";
 import {
-  buildMonthRange,
-  projectCashFlow,
-  type MonthInput,
-} from "@/lib/cash-flow/project";
+  computeBaseProjections,
+  type CashFlowProjectionData,
+} from "@/lib/cash-flow/compute-projection";
 import type {
   CashFlowEntryType,
   CashFlowTemplateType,
@@ -575,7 +575,10 @@ export async function getCardProjectionGrid(startYear: number, startMonth: numbe
   return { months, cards, values, totalsByMonth, projectionMonths: settings.projection_months };
 }
 
-export async function getCashFlowProjection(startYear: number, startMonth: number) {
+export async function loadCashFlowProjectionData(
+  startYear: number,
+  startMonth: number
+): Promise<CashFlowProjectionData & { cardGrid: Awaited<ReturnType<typeof getCardProjectionGrid>> }> {
   const settings = await getOrCreateCashFlowSettings();
   const monthRefs = buildMonthRange(
     startYear,
@@ -628,16 +631,13 @@ export async function getCashFlowProjection(startYear: number, startMonth: numbe
     });
   }
 
-  const projections = projectCashFlow({
-    months: monthInputs,
-    openingBalanceCents: settings.opening_balance_cents,
-    monthlyVariableProjectionCents:
-      settings.monthly_variable_projection_cents ?? 0,
-    historicalByCategory,
-    defaultEstimationMethod: settings.default_estimation_method,
-  });
-
   const cardGrid = await getCardProjectionGrid(startYear, startMonth);
 
-  return { settings, monthInputs, projections, cardGrid };
+  return { settings, monthInputs, historicalByCategory, cardGrid };
+}
+
+export async function getCashFlowProjection(startYear: number, startMonth: number) {
+  const data = await loadCashFlowProjectionData(startYear, startMonth);
+  const projections = computeBaseProjections(data);
+  return { ...data, projections };
 }

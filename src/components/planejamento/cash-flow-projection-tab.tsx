@@ -1,32 +1,22 @@
 "use client";
 
-import { useTransition } from "react";
-import { toast } from "sonner";
 import { CardInstallmentGrid } from "@/components/planejamento/card-installment-grid";
-import { applyEstimation } from "@/lib/actions/cash-flow";
-import type { MonthProjection } from "@/lib/cash-flow/project";
-import type { Card as CreditCard, EstimationMethod } from "@/types/database";
-import { formatCurrency, formatReferenceMonthLabel } from "@/lib/utils";
-import { CashFlowBalanceChart } from "@/components/charts/cash-flow-balance";
-import { Button } from "@/components/ui/button";
+import { ScenarioTabs, type ScenarioProjectionResult } from "@/components/planejamento/scenario-tabs";
+import { ScenariosPdfExport } from "@/components/planejamento/scenarios-pdf-export";
+import type { MonthInput } from "@/lib/cash-flow/project";
+import type { Card as CreditCard, CashFlowSettings } from "@/types/database";
+import { formatCurrency } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
 
 export function CashFlowProjectionTab({
-  projections,
-  defaultMethod,
+  settings,
+  monthInputs,
+  scenarios,
   cardGrid,
 }: {
-  projections: MonthProjection[];
-  defaultMethod: EstimationMethod;
+  settings: CashFlowSettings;
+  monthInputs: MonthInput[];
+  scenarios: ScenarioProjectionResult[];
   cardGrid: {
     months: string[];
     cards: CreditCard[];
@@ -34,126 +24,63 @@ export function CashFlowProjectionTab({
     totalsByMonth: Record<string, number>;
   };
 }) {
-  const [pending, startTransition] = useTransition();
-
-  const firstPositive = projections.find((p) => p.cumulativeBalanceCents > 0);
-
-  function handleApply(method: EstimationMethod) {
-    startTransition(async () => {
-      try {
-        await applyEstimation(method);
-        toast.success("Estimativa aplicada");
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Erro");
-      }
-    });
-  }
+  const firstMonth = monthInputs[0];
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Estimativa de variáveis</CardTitle>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-semibold">Base compartilhada</h2>
           <p className="text-sm text-muted-foreground">
-            Método atual: <strong>{defaultMethod}</strong>. Aplique para preencher categorias
-            &quot;A definir&quot; nos próximos meses.
+            Receitas, fixos e cartão são iguais em todos os cenários.
           </p>
-        </CardHeader>
-        <CardContent className="flex flex-wrap gap-2">
-          <Button
-            variant="outline"
-            disabled={pending}
-            onClick={() => handleApply("surplus_allocation")}
-          >
-            Aplicar superávit acumulado
-          </Button>
-          <Button
-            variant="outline"
-            disabled={pending}
-            onClick={() => handleApply("historical_avg")}
-          >
-            Aplicar média histórica (3 meses)
-          </Button>
-        </CardContent>
-      </Card>
+        </div>
+        <ScenariosPdfExport
+          settings={settings}
+          monthInputs={monthInputs}
+          scenarios={scenarios}
+          cardGrid={cardGrid}
+        />
+      </div>
 
-      {firstPositive ? (
+      <div className="grid gap-4 md:grid-cols-4">
         <Card>
-          <CardContent className="py-4 text-sm">
-            Saldo acumulado positivo a partir de{" "}
-            <strong>{firstPositive.referenceMonth}</strong> (
-            {formatCurrency(firstPositive.cumulativeBalanceCents)}).
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-muted-foreground">Saldo inicial</CardTitle>
+          </CardHeader>
+          <CardContent className="text-xl font-bold">
+            {formatCurrency(settings.opening_balance_cents)}
           </CardContent>
         </Card>
-      ) : null}
-
-      <CashFlowBalanceChart projections={projections} />
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Fluxo de caixa — {projections.length} meses</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Mês</TableHead>
-                <TableHead className="text-right">Receitas</TableHead>
-                <TableHead className="text-right">Fixos</TableHead>
-                <TableHead className="text-right">Cartão</TableHead>
-                <TableHead className="text-right">Variáveis</TableHead>
-                <TableHead className="text-right">Saldo mês</TableHead>
-                <TableHead className="text-right">Acumulado</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {projections.map((row) => (
-                <TableRow key={row.referenceMonth}>
-                  <TableCell className="font-medium">
-                    {formatReferenceMonthLabel(row.referenceMonth)}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {formatCurrency(row.incomeCents)}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {formatCurrency(row.fixedCents)}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {formatCurrency(row.cardCents)}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {row.variableHasUndefined && row.variableCents === 0 ? (
-                      <Badge variant="warning">A definir</Badge>
-                    ) : (
-                      <span className={row.variableEstimated ? "italic text-muted-foreground" : ""}>
-                        {formatCurrency(row.variableCents)}
-                        {row.variableEstimated ? " *" : ""}
-                      </span>
-                    )}
-                  </TableCell>
-                  <TableCell
-                    className={`text-right ${
-                      row.monthBalanceCents >= 0 ? "text-emerald-600" : "text-red-600"
-                    }`}
-                  >
-                    {formatCurrency(row.monthBalanceCents)}
-                  </TableCell>
-                  <TableCell
-                    className={`text-right font-medium ${
-                      row.cumulativeBalanceCents >= 0 ? "text-emerald-600" : "text-red-600"
-                    }`}
-                  >
-                    {formatCurrency(row.cumulativeBalanceCents)}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-          <p className="px-4 py-2 text-xs text-muted-foreground">
-            * Valor estimado (não confirmado manualmente)
-          </p>
-        </CardContent>
-      </Card>
+        {firstMonth ? (
+          <>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm text-muted-foreground">Receitas (1º mês)</CardTitle>
+              </CardHeader>
+              <CardContent className="text-xl font-bold text-emerald-600">
+                {formatCurrency(firstMonth.incomeCents)}
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm text-muted-foreground">Fixos (1º mês)</CardTitle>
+              </CardHeader>
+              <CardContent className="text-xl font-bold">
+                {formatCurrency(firstMonth.fixedCents)}
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm text-muted-foreground">Cartão (1º mês)</CardTitle>
+              </CardHeader>
+              <CardContent className="text-xl font-bold">
+                {formatCurrency(firstMonth.cardCents)}
+              </CardContent>
+            </Card>
+          </>
+        ) : null}
+      </div>
 
       <CardInstallmentGrid
         months={cardGrid.months}
@@ -162,6 +89,11 @@ export function CashFlowProjectionTab({
         totalsByMonth={cardGrid.totalsByMonth}
         readOnly
       />
+
+      <div>
+        <h2 className="mb-4 text-lg font-semibold">Cenários de despesas variáveis</h2>
+        <ScenarioTabs scenarios={scenarios} months={cardGrid.months} />
+      </div>
     </div>
   );
 }

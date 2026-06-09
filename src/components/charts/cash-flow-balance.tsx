@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, ReferenceLine } from "recharts";
 import { buildYAxisScale } from "@/lib/charts/y-axis-scale";
 import { cn, formatCurrency } from "@/lib/utils";
@@ -35,10 +35,16 @@ function formatAxisCurrency(value: number, step: YAxisStep): string {
 
 export function CashFlowBalanceChart({
   projections,
+  defaultYAxisStep = 20000,
 }: {
   projections: MonthProjection[];
+  defaultYAxisStep?: YAxisStep;
 }) {
-  const [yAxisStep, setYAxisStep] = useState<YAxisStep>(20000);
+  const [yAxisStep, setYAxisStep] = useState<YAxisStep>(defaultYAxisStep);
+
+  useEffect(() => {
+    setYAxisStep(defaultYAxisStep);
+  }, [defaultYAxisStep]);
 
   const chartData = projections.map((p) => ({
     month: p.referenceMonth.slice(5) + "/" + p.referenceMonth.slice(2, 4),

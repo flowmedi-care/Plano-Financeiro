@@ -233,6 +233,28 @@ export interface CashFlowSettings {
   created_at: string;
 }
 
+export type ProjectionScenarioType = "fixed" | "monthly";
+
+export interface ProjectionScenario {
+  id: string;
+  user_id: string;
+  household_id: string | null;
+  scope: ScopeType;
+  name: string;
+  type: ProjectionScenarioType;
+  fixed_amount_cents: number | null;
+  sort_order: number;
+  created_at: string;
+}
+
+export interface ProjectionScenarioMonthValue {
+  id: string;
+  scenario_id: string;
+  reference_month: string;
+  amount_cents: number;
+  created_at: string;
+}
+
 export interface BudgetVariableExpense {
   id: string;
   budget_month_id: string;

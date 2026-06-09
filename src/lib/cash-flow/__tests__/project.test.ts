@@ -50,10 +50,10 @@ describe("projectCashFlow", () => {
     expect(projections[0].cumulativeBalanceCents).toBe(-432700);
   });
 
-  it("uses monthly variable projection when categories are empty", () => {
+  it("uses scenario variable resolver when categories are empty", () => {
     const projections = projectCashFlow({
       openingBalanceCents: 0,
-      monthlyVariableProjectionCents: 500000,
+      resolveScenarioVariable: () => 500000,
       defaultEstimationMethod: "none",
       historicalByCategory: new Map(),
       months: [
@@ -69,6 +69,35 @@ describe("projectCashFlow", () => {
 
     expect(projections[0].variableCents).toBe(500000);
     expect(projections[0].monthBalanceCents).toBe(0);
+  });
+
+  it("uses per-month scenario values", () => {
+    const projections = projectCashFlow({
+      openingBalanceCents: 0,
+      resolveScenarioVariable: (ref) =>
+        ref === "2026-06" ? 300000 : ref === "2026-07" ? 500000 : 0,
+      defaultEstimationMethod: "none",
+      historicalByCategory: new Map(),
+      months: [
+        {
+          referenceMonth: "2026-06",
+          incomeCents: 1000000,
+          fixedCents: 400000,
+          cardCents: 100000,
+          variableSlots: [],
+        },
+        {
+          referenceMonth: "2026-07",
+          incomeCents: 1000000,
+          fixedCents: 400000,
+          cardCents: 100000,
+          variableSlots: [],
+        },
+      ],
+    });
+
+    expect(projections[0].variableCents).toBe(300000);
+    expect(projections[1].variableCents).toBe(500000);
   });
 
   it("estimates variable via surplus for tracked slots", () => {

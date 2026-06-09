@@ -12,10 +12,15 @@ export function buildYAxisScale(values: number[], step: number) {
 
   const range = domainMax - domainMin;
   const tickCount = range / step + 1;
+  const ticks: number[] = [];
+  for (let tick = domainMin; tick <= domainMax; tick += step) {
+    ticks.push(tick);
+  }
 
   return {
     domain: [domainMin, domainMax] as [number, number],
     tickCount,
+    ticks,
     step,
   };
 }
