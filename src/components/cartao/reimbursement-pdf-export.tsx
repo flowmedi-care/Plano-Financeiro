@@ -10,11 +10,15 @@ import {
   formatReferenceMonthLabel,
   formatReferenceMonthShort,
   getPersonOwedTransactions,
+  getPreviousReferenceMonth,
   getSelfTransactions,
   resolveMonthComparison,
 } from "@/lib/transactions/summary";
 import { generateSpendingReportPdf } from "@/lib/reports/reimbursement-pdf";
-import { MonthCategoryComparisonChart } from "@/components/charts/month-category-comparison";
+import {
+  MonthCategoryComparisonSection,
+  type ComparisonScopeValue,
+} from "@/components/charts/month-category-comparison";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -71,24 +75,38 @@ export function ReimbursementPdfExport({
       ? people.find((p) => p.id === selectedId)
       : null;
 
-  const monthComparison = useMemo(() => {
-    if (selectedId === SELF_OPTION_ID) {
-      return resolveMonthComparison(allTransactions, monthFilter, { type: "self" });
-    }
-    if (!selectedId) return null;
-    return resolveMonthComparison(allTransactions, monthFilter, {
-      type: "person",
-      personId: selectedId,
-    });
-  }, [allTransactions, monthFilter, selectedId]);
+  const monthPair = useMemo(() => {
+    if (monthFilter === "all") return null;
+    const previousMonth = getPreviousReferenceMonth(allTransactions, monthFilter);
+    if (!previousMonth) return null;
+    return { currentMonth: monthFilter, previousMonth };
+  }, [allTransactions, monthFilter]);
+
+  const fixedScope: ComparisonScopeValue | undefined = selectedId
+    ? selectedId === SELF_OPTION_ID
+      ? "self"
+      : `person:${selectedId}`
+    : undefined;
 
   function buildMonthComparisonPdf() {
-    if (!monthComparison) return undefined;
+    if (!monthPair || !fixedScope) return undefined;
+
+    const comparison =
+      fixedScope === "self"
+        ? resolveMonthComparison(allTransactions, monthPair.currentMonth, {
+            type: "self",
+          })
+        : resolveMonthComparison(allTransactions, monthPair.currentMonth, {
+            type: "person",
+            personId: fixedScope.replace("person:", ""),
+          });
+
+    if (!comparison) return undefined;
 
     return {
-      previousMonthLabel: formatReferenceMonthShort(monthComparison.previousMonth),
-      currentMonthLabel: formatReferenceMonthShort(monthComparison.currentMonth),
-      items: monthComparison.items,
+      previousMonthLabel: formatReferenceMonthShort(comparison.previousMonth),
+      currentMonthLabel: formatReferenceMonthShort(comparison.currentMonth),
+      items: comparison.items,
     };
   }
 
@@ -206,11 +224,14 @@ export function ReimbursementPdfExport({
         </CardContent>
       </Card>
 
-      {monthComparison ? (
-        <MonthCategoryComparisonChart
-          currentMonth={monthComparison.currentMonth}
-          previousMonth={monthComparison.previousMonth}
-          items={monthComparison.items}
+      {monthPair && fixedScope ? (
+        <MonthCategoryComparisonSection
+          allTransactions={allTransactions}
+          people={people}
+          currentMonth={monthPair.currentMonth}
+          previousMonth={monthPair.previousMonth}
+          fixedScope={fixedScope}
+          hideFilter
           title={
             selectedId === SELF_OPTION_ID
               ? "Comparação — meus gastos"

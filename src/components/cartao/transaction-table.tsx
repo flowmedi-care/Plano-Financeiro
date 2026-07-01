@@ -354,7 +354,6 @@ export function TransactionTable({
 
       <TransactionSummary
         transactions={filtered}
-        allTransactions={transactions}
         people={people}
         monthFilter={monthFilter}
       />

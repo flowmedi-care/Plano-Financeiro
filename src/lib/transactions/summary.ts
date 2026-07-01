@@ -227,7 +227,11 @@ export function computeMonthOverMonthComparison(
     });
   }
 
-  return results.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+  return results.sort(
+    (a, b) =>
+      Math.max(b.currentTotal, b.previousTotal) -
+      Math.max(a.currentTotal, a.previousTotal)
+  );
 }
 
 export function getTransactionReferenceMonth(tx: Transaction): string {

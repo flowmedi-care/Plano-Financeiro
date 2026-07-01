@@ -131,6 +131,20 @@ describe("computeMonthOverMonthComparison", () => {
     expect(lazer?.delta).toBe(5000);
     expect(mercado?.delta).toBe(-4000);
   });
+
+  it("includes categories that only appear in the previous month", () => {
+    const current = [
+      { categoryId: "cat-a", name: "Lazer", color: "#f00", total: 0 },
+    ];
+    const previous = [
+      { categoryId: "cat-b", name: "Viagem", color: "#00f", total: 5000 },
+    ];
+
+    const result = computeMonthOverMonthComparison(current, previous);
+    expect(result.some((item) => item.name === "Viagem")).toBe(true);
+    expect(result.find((item) => item.name === "Viagem")?.previousTotal).toBe(5000);
+    expect(result.find((item) => item.name === "Viagem")?.currentTotal).toBe(0);
+  });
 });
 
 describe("resolveMonthComparison", () => {

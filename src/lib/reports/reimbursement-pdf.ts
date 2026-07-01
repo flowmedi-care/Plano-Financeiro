@@ -37,6 +37,20 @@ function groupByCategory(
   );
 }
 
+function comparisonItemsWithData(
+  items: CategoryMonthComparison[]
+): CategoryMonthComparison[] {
+  return items.filter(
+    (item) => item.currentTotal > 0 || item.previousTotal > 0
+  );
+}
+
+function formatDelta(item: CategoryMonthComparison): string {
+  if (item.delta === 0) return formatCurrency(0);
+  const sign = item.delta > 0 ? "+" : "−";
+  return `${sign}${formatCurrency(Math.abs(item.delta))}`;
+}
+
 function getFinalY(doc: jsPDF, fallback: number): number {
   return (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable
     ?.finalY ?? fallback;
@@ -141,60 +155,6 @@ export function generateSpendingReportPdf(params: {
 
   y = getFinalY(doc, y) + 10;
 
-  if (monthComparison && monthComparison.items.length > 0) {
-    if (y > 200) {
-      doc.addPage();
-      y = 18;
-    }
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
-    doc.text("Comparação com fatura anterior", 14, y);
-    y += 4;
-
-    const comparisonPoints = monthComparison.items
-      .filter(
-        (item) =>
-          item.delta !== 0 || item.currentTotal > 0 || item.previousTotal > 0
-      )
-      .slice(0, 8)
-      .map((item) => ({
-        label: item.name,
-        previousValue: item.previousTotal,
-        currentValue: item.currentTotal,
-      }));
-
-    const comparisonImage = renderGroupedBarChartToDataUrl(comparisonPoints, {
-      previousLabel: monthComparison.previousMonthLabel,
-      currentLabel: monthComparison.currentMonthLabel,
-    });
-
-    if (comparisonImage) {
-      doc.addImage(comparisonImage, "PNG", 14, y, 182, 68);
-      y += 74;
-    }
-
-    autoTable(doc, {
-      startY: y,
-      head: [["Categoria", monthComparison.previousMonthLabel, monthComparison.currentMonthLabel, "Variação"]],
-      body: monthComparison.items.map((item) => {
-        const sign = item.delta > 0 ? "+" : item.delta < 0 ? "−" : "";
-        return [
-          item.name,
-          formatCurrency(item.previousTotal),
-          formatCurrency(item.currentTotal),
-          `${sign}${formatCurrency(Math.abs(item.delta))}`,
-        ];
-      }),
-      theme: "grid",
-      headStyles: { fillColor: [100, 116, 139] },
-      styles: { fontSize: 9 },
-      margin: { left: 14, right: 14 },
-    });
-
-    y = getFinalY(doc, y) + 10;
-  }
-
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
   doc.text("Transações", 14, y);
@@ -242,6 +202,70 @@ export function generateSpendingReportPdf(params: {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
   doc.text(`Total: ${formatCurrency(totalAmount)}`, 14, y);
+  y += 12;
+
+  if (monthComparison) {
+    const comparisonRows = comparisonItemsWithData(monthComparison.items);
+    if (comparisonRows.length > 0) {
+      doc.addPage();
+      y = 18;
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(14);
+      doc.text("Comparação com a fatura anterior", pageWidth / 2, y, {
+        align: "center",
+      });
+      y += 10;
+
+      const comparisonPoints = comparisonRows.map((item) => ({
+        label: item.name,
+        previousValue: item.previousTotal,
+        currentValue: item.currentTotal,
+      }));
+
+      const comparisonImage = renderGroupedBarChartToDataUrl(comparisonPoints, {
+        previousLabel: monthComparison.previousMonthLabel,
+        currentLabel: monthComparison.currentMonthLabel,
+      });
+
+      if (comparisonImage) {
+        doc.addImage(comparisonImage, "PNG", 14, y, 182, 68);
+        y += 74;
+      }
+
+      autoTable(doc, {
+        startY: y,
+        head: [
+          [
+            "Categoria",
+            monthComparison.previousMonthLabel,
+            monthComparison.currentMonthLabel,
+            "Variação",
+          ],
+        ],
+        body: comparisonRows.map((item) => [
+          item.name,
+          formatCurrency(item.previousTotal),
+          formatCurrency(item.currentTotal),
+          formatDelta(item),
+        ]),
+        theme: "grid",
+        headStyles: { fillColor: [100, 116, 139] },
+        styles: { fontSize: 9 },
+        margin: { left: 14, right: 14 },
+        didParseCell(data) {
+          if (data.section !== "body" || data.column.index !== 3) return;
+          const row = comparisonRows[data.row.index];
+          if (!row || row.delta === 0) return;
+          if (row.delta > 0) {
+            data.cell.styles.textColor = [22, 163, 74];
+          } else {
+            data.cell.styles.textColor = [220, 38, 38];
+          }
+        },
+      });
+    }
+  }
 
   const safeName = recipientName.replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "-");
   const safeMonth = monthLabel.replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "-");

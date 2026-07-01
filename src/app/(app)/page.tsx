@@ -1,15 +1,15 @@
 import { CategoryPieChart } from "@/components/charts/category-pie";
 import { ProjectionLineChart } from "@/components/charts/projection-line";
 import { BudgetComparisonChart } from "@/components/charts/budget-comparison";
-import { MonthCategoryComparisonChart } from "@/components/charts/month-category-comparison";
+import { MonthCategoryComparisonSection } from "@/components/charts/month-category-comparison";
 import { PersonOwedChart } from "@/components/charts/person-owed";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getBudgetDetails } from "@/lib/actions/budget";
 import { getInstallmentProjections } from "@/lib/actions/installments";
+import { getPeople } from "@/lib/actions/people";
 import { getAmountsOwedByPerson } from "@/lib/actions/splits";
 import {
   getAccountTotals,
-  getMonthOverMonthCategoryComparison,
   getReferenceMonths,
   getSpendingByCategory,
   getTransactions,
@@ -35,7 +35,8 @@ export default async function DashboardPage() {
     budget,
     transactions,
     amountsOwed,
-    monthComparison,
+    allTransactions,
+    people,
   ] = await Promise.all([
     getSpendingByCategory(referenceMonth),
     getAccountTotals(referenceMonth),
@@ -43,8 +44,17 @@ export default async function DashboardPage() {
     getBudgetDetails(year, month),
     getTransactions({ referenceMonth }),
     getAmountsOwedByPerson(referenceMonth),
-    getMonthOverMonthCategoryComparison(),
+    getTransactions(),
+    getPeople(),
   ]);
+
+  const monthComparison =
+    referenceMonths.length >= 2
+      ? {
+          currentMonth: referenceMonths[referenceMonths.length - 1],
+          previousMonth: referenceMonths[referenceMonths.length - 2],
+        }
+      : null;
 
   const comparison = budget.variableExpenses.map((item) => {
     const actual = transactions
@@ -110,10 +120,12 @@ export default async function DashboardPage() {
       <PersonOwedChart data={amountsOwed} />
 
       {monthComparison ? (
-        <MonthCategoryComparisonChart
+        <MonthCategoryComparisonSection
+          allTransactions={allTransactions}
+          people={people}
           currentMonth={monthComparison.currentMonth}
           previousMonth={monthComparison.previousMonth}
-          items={monthComparison.items}
+          defaultScope="self"
         />
       ) : null}
 
