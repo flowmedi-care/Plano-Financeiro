@@ -87,12 +87,12 @@ export function CashFlowProjectionTab({
 
       <CardInstallmentGrid
         months={cardGrid.months}
+        futureMonths={cardGrid.futureMonths}
         cards={cardGrid.cards}
         values={cardGrid.values}
         totalsByMonth={cardGrid.totalsByMonth}
         focusMonth={cardGrid.focusMonth}
         historyMonth={cardGrid.historyMonth}
-        lockHistory
       />
 
       <div>

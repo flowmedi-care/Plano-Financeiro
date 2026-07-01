@@ -66,6 +66,7 @@ export function CashFlowEntriesTab({
     <div className="space-y-6">
       <CardInstallmentGrid
         months={cardGrid.months}
+        futureMonths={cardGrid.futureMonths}
         cards={cardGrid.cards}
         values={cardGrid.values}
         totalsByMonth={cardGrid.totalsByMonth}
