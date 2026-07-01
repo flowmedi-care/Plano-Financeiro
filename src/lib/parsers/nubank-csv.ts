@@ -1,7 +1,7 @@
 import Papa from "papaparse";
 import { parseBrazilianAmount } from "@/lib/parsers/amount";
 import { extractInstallmentFromTitle } from "@/lib/parsers/installments";
-import { normalizeMerchant } from "@/lib/merchants/normalize";
+import { merchantKeyFromDescription } from "@/lib/merchants/normalize";
 import type { ParseResult, ParsedTransaction } from "@/types/database";
 
 interface NubankRow {
@@ -78,7 +78,7 @@ function mapRow(row: NubankRow): ParsedTransaction | null {
   return {
     date: row.date.trim(),
     description,
-    merchantKey: normalizeMerchant(description),
+    merchantKey: merchantKeyFromDescription(description),
     amountCents: Math.abs(amountCents),
     installmentCurrent: installment?.current ?? null,
     installmentTotal: installment?.total ?? null,

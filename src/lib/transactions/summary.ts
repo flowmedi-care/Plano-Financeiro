@@ -22,6 +22,80 @@ export interface CategorySpending {
   total: number;
 }
 
+export interface CategorySpendingDetail extends CategorySpending {
+  categoryId: string | null;
+}
+
+export interface CategoryMonthComparison {
+  categoryId: string | null;
+  name: string;
+  color: string;
+  currentTotal: number;
+  previousTotal: number;
+  delta: number;
+}
+
+export function formatReferenceMonthLabel(month: string): string {
+  const [year, monthNumber] = month.split("-");
+  const date = new Date(Number(year), Number(monthNumber) - 1, 1);
+  return date.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+}
+
+export function computeSpendingByCategoryDetailed(
+  transactions: Transaction[]
+): CategorySpendingDetail[] {
+  const map = new Map<string, CategorySpendingDetail>();
+
+  for (const tx of transactions) {
+    const key = tx.category_id ?? "__uncategorized__";
+    const current = map.get(key) ?? {
+      categoryId: tx.category_id,
+      name: tx.category?.name ?? "Sem categoria",
+      color: tx.category?.color ?? "#94a3b8",
+      total: 0,
+    };
+    current.total += tx.amount_cents;
+    map.set(key, current);
+  }
+
+  return Array.from(map.values()).sort((a, b) => b.total - a.total);
+}
+
+export function computeMonthOverMonthComparison(
+  current: CategorySpendingDetail[],
+  previous: CategorySpendingDetail[]
+): CategoryMonthComparison[] {
+  const previousMap = new Map(
+    previous.map((item) => [item.categoryId ?? "__uncategorized__", item])
+  );
+  const keys = new Set([
+    ...current.map((item) => item.categoryId ?? "__uncategorized__"),
+    ...previous.map((item) => item.categoryId ?? "__uncategorized__"),
+  ]);
+
+  const results: CategoryMonthComparison[] = [];
+
+  for (const key of keys) {
+    const currentItem = current.find(
+      (item) => (item.categoryId ?? "__uncategorized__") === key
+    );
+    const previousItem = previousMap.get(key);
+    const currentTotal = currentItem?.total ?? 0;
+    const previousTotal = previousItem?.total ?? 0;
+
+    results.push({
+      categoryId: key === "__uncategorized__" ? null : key,
+      name: currentItem?.name ?? previousItem?.name ?? "Sem categoria",
+      color: currentItem?.color ?? previousItem?.color ?? "#94a3b8",
+      currentTotal,
+      previousTotal,
+      delta: currentTotal - previousTotal,
+    });
+  }
+
+  return results.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+}
+
 export function getTransactionReferenceMonth(tx: Transaction): string {
   return tx.reference_month ?? tx.transaction_date.slice(0, 7);
 }

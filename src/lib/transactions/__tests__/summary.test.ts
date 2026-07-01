@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  computeMonthOverMonthComparison,
   computeOwedByCategory,
   computeSelfByCategory,
   computeSpendingByCategory,
@@ -108,5 +109,25 @@ describe("groupTransactionsByCategory", () => {
     const result = groupTransactionsByCategory(transactions);
     expect(result.length).toBeGreaterThan(0);
     expect(result.reduce((s, g) => s + g.transactions.length, 0)).toBe(2);
+  });
+});
+
+describe("computeMonthOverMonthComparison", () => {
+  it("computes deltas between months per category", () => {
+    const current = [
+      { categoryId: "cat-a", name: "Lazer", color: "#f00", total: 15000 },
+      { categoryId: "cat-b", name: "Mercado", color: "#0f0", total: 8000 },
+    ];
+    const previous = [
+      { categoryId: "cat-a", name: "Lazer", color: "#f00", total: 10000 },
+      { categoryId: "cat-b", name: "Mercado", color: "#0f0", total: 12000 },
+    ];
+
+    const result = computeMonthOverMonthComparison(current, previous);
+    const lazer = result.find((item) => item.name === "Lazer");
+    const mercado = result.find((item) => item.name === "Mercado");
+
+    expect(lazer?.delta).toBe(5000);
+    expect(mercado?.delta).toBe(-4000);
   });
 });

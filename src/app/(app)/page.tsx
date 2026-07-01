@@ -1,6 +1,7 @@
 import { CategoryPieChart } from "@/components/charts/category-pie";
 import { ProjectionLineChart } from "@/components/charts/projection-line";
 import { BudgetComparisonChart } from "@/components/charts/budget-comparison";
+import { MonthCategoryComparisonChart } from "@/components/charts/month-category-comparison";
 import { PersonOwedChart } from "@/components/charts/person-owed";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getBudgetDetails } from "@/lib/actions/budget";
@@ -8,16 +9,24 @@ import { getInstallmentProjections } from "@/lib/actions/installments";
 import { getAmountsOwedByPerson } from "@/lib/actions/splits";
 import {
   getAccountTotals,
+  getMonthOverMonthCategoryComparison,
+  getReferenceMonths,
   getSpendingByCategory,
   getTransactions,
 } from "@/lib/actions/transactions";
+import { formatReferenceMonthLabel } from "@/lib/transactions/summary";
 import { formatCurrency } from "@/lib/utils";
 
 export default async function DashboardPage() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth() + 1;
-  const referenceMonth = `${year}-${String(month).padStart(2, "0")}`;
+  const referenceMonths = await getReferenceMonths();
+  const referenceMonth =
+    referenceMonths[referenceMonths.length - 1] ??
+    (() => {
+      const now = new Date();
+      return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    })();
+
+  const [year, month] = referenceMonth.split("-").map(Number);
 
   const [
     spendingByCategory,
@@ -26,6 +35,7 @@ export default async function DashboardPage() {
     budget,
     transactions,
     amountsOwed,
+    monthComparison,
   ] = await Promise.all([
     getSpendingByCategory(referenceMonth),
     getAccountTotals(referenceMonth),
@@ -33,6 +43,7 @@ export default async function DashboardPage() {
     getBudgetDetails(year, month),
     getTransactions({ referenceMonth }),
     getAmountsOwedByPerson(referenceMonth),
+    getMonthOverMonthCategoryComparison(),
   ]);
 
   const comparison = budget.variableExpenses.map((item) => {
@@ -55,7 +66,7 @@ export default async function DashboardPage() {
       <div>
         <h1 className="text-2xl font-bold">Dashboard</h1>
         <p className="text-muted-foreground">
-          Visão geral da fatura {referenceMonth}
+          Visão geral da fatura {formatReferenceMonthLabel(referenceMonth)}
         </p>
       </div>
 
@@ -97,6 +108,14 @@ export default async function DashboardPage() {
       </div>
 
       <PersonOwedChart data={amountsOwed} />
+
+      {monthComparison ? (
+        <MonthCategoryComparisonChart
+          currentMonth={monthComparison.currentMonth}
+          previousMonth={monthComparison.previousMonth}
+          items={monthComparison.items}
+        />
+      ) : null}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <CategoryPieChart data={spendingByCategory} />

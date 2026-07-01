@@ -5,7 +5,7 @@ import type { Card as CreditCard, DetectedCardSummary } from "@/types/database";
 import { toast } from "sonner";
 import { Plus, Trash2, Upload } from "lucide-react";
 import { confirmImport } from "@/lib/actions/imports";
-import { normalizeMerchant } from "@/lib/merchants/normalize";
+import { merchantKeyFromDescription } from "@/lib/merchants/normalize";
 import type { Account, ParsedTransaction, ParseResult } from "@/types/database";
 import { formatCurrency } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -165,7 +165,7 @@ export function ImportForm({ accounts }: { accounts: Account[] }) {
         _id: crypto.randomUUID(),
         date: newDate,
         description,
-        merchantKey: normalizeMerchant(description),
+        merchantKey: merchantKeyFromDescription(description),
         amountCents,
         installmentCurrent,
         installmentTotal,

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveScope } from "@/lib/scope";
 import { getProfile } from "@/lib/actions/profile";
+import { merchantKeyFromDescription, merchantKeysForRuleLookup } from "@/lib/merchants/normalize";
 import {
   validateSplits,
   type SplitInput,
@@ -27,7 +28,7 @@ export async function assignSplits(params: {
 
   const { data: transactions } = await supabase
     .from("transactions")
-    .select("id, amount_cents, merchant_key, account_id")
+    .select("id, amount_cents, merchant_key, account_id, description")
     .in("id", params.transactionIds);
 
   if (!transactions?.length) throw new Error("Transações não encontradas");
@@ -65,13 +66,17 @@ export async function assignSplits(params: {
     transactions.length === 1
   ) {
     const tx = transactions[0];
-    const merchantKey = params.merchantKey ?? tx.merchant_key;
+    const merchantKey = merchantKeyFromDescription(tx.description);
+    const candidateKeys = merchantKeysForRuleLookup({
+      merchantKey: tx.merchant_key,
+      description: tx.description,
+    });
     const accountId = params.accountId ?? tx.account_id;
 
     let ruleQuery = supabase
       .from("merchant_split_rules")
       .select("id")
-      .eq("merchant_key", merchantKey)
+      .in("merchant_key", candidateKeys)
       .eq("scope", scope);
 
     if (scope === "household" && householdId) {
@@ -91,6 +96,7 @@ export async function assignSplits(params: {
     const rulePayload = {
       split_mode: params.splitMode,
       person_ids: params.personIds,
+      merchant_key: merchantKey,
     };
 
     if (existingRule) {
@@ -104,7 +110,6 @@ export async function assignSplits(params: {
         household_id: scope === "household" ? householdId : null,
         scope,
         account_id: accountId,
-        merchant_key: merchantKey,
         ...rulePayload,
       });
     }

@@ -4,7 +4,11 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveScope } from "@/lib/scope";
 import { getProfile } from "@/lib/actions/profile";
-import { buildDedupHash } from "@/lib/merchants/normalize";
+import {
+  buildDedupHash,
+  lookupInRuleMap,
+  stableMerchantKeyFromNormalized,
+} from "@/lib/merchants/normalize";
 import { splitsFromRule } from "@/lib/splits/calculate";
 import type { ParsedTransaction, ParsedInstallmentProjection } from "@/types/database";
 
@@ -64,35 +68,47 @@ export async function confirmImport(params: {
 
   const ruleMap = new Map<string, string>();
   for (const rule of rules ?? []) {
-    const key = rule.account_id ? `${rule.merchant_key}|${rule.account_id}` : rule.merchant_key;
-    ruleMap.set(key, rule.category_id);
-    if (!ruleMap.has(rule.merchant_key)) {
-      ruleMap.set(rule.merchant_key, rule.category_id);
+    const merchantKeys = new Set([
+      rule.merchant_key,
+      stableMerchantKeyFromNormalized(rule.merchant_key),
+    ]);
+    for (const merchantKey of merchantKeys) {
+      const key = rule.account_id ? `${merchantKey}|${rule.account_id}` : merchantKey;
+      ruleMap.set(key, rule.category_id);
+      if (!ruleMap.has(merchantKey)) {
+        ruleMap.set(merchantKey, rule.category_id);
+      }
     }
   }
 
   const splitRuleMap = new Map<string, SplitRuleEntry>();
   for (const rule of splitRules ?? []) {
-    const key = rule.account_id ? `${rule.merchant_key}|${rule.account_id}` : rule.merchant_key;
-    splitRuleMap.set(key, {
+    const merchantKeys = new Set([
+      rule.merchant_key,
+      stableMerchantKeyFromNormalized(rule.merchant_key),
+    ]);
+    const entry = {
       split_mode: rule.split_mode,
       person_ids: rule.person_ids ?? [],
-    });
-    if (!splitRuleMap.has(rule.merchant_key)) {
-      splitRuleMap.set(rule.merchant_key, {
-        split_mode: rule.split_mode,
-        person_ids: rule.person_ids ?? [],
-      });
+    };
+    for (const merchantKey of merchantKeys) {
+      const key = rule.account_id ? `${merchantKey}|${rule.account_id}` : merchantKey;
+      splitRuleMap.set(key, entry);
+      if (!splitRuleMap.has(merchantKey)) {
+        splitRuleMap.set(merchantKey, entry);
+      }
     }
   }
 
   const rows = params.transactions
     .filter((tx) => !tx.isPayment)
     .map((tx) => {
-      const categoryId =
-        ruleMap.get(`${tx.merchantKey}|${params.accountId}`) ??
-        ruleMap.get(tx.merchantKey) ??
-        null;
+      const categoryId = lookupInRuleMap(
+        ruleMap,
+        tx.merchantKey,
+        params.accountId,
+        tx.description
+      ) ?? null;
 
       return {
         user_id: profile.id,
@@ -148,9 +164,11 @@ export async function confirmImport(params: {
     }[] = [];
 
     for (const tx of insertedTransactions) {
-      const splitRule =
-        splitRuleMap.get(`${tx.merchant_key}|${params.accountId}`) ??
-        splitRuleMap.get(tx.merchant_key);
+      const splitRule = lookupInRuleMap(
+        splitRuleMap,
+        tx.merchant_key,
+        params.accountId
+      );
 
       if (!splitRule || splitRule.person_ids.length === 0) continue;
 

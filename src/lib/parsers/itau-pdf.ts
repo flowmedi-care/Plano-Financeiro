@@ -1,6 +1,6 @@
 import { parseBrazilianAmount } from "@/lib/parsers/amount";
 import { extractInstallmentFromItauLine } from "@/lib/parsers/installments";
-import { normalizeMerchant } from "@/lib/merchants/normalize";
+import { merchantKeyFromDescription } from "@/lib/merchants/normalize";
 import type {
   DetectedCardSummary,
   ParseResult,
@@ -136,7 +136,7 @@ function parseTransactionLine(
   return {
     date: toIsoDate(dayMonth, referenceYear),
     description,
-    merchantKey: normalizeMerchant(description),
+    merchantKey: merchantKeyFromDescription(description),
     amountCents: Math.abs(amountCents),
     installmentCurrent: current,
     installmentTotal: total,

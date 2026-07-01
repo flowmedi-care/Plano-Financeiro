@@ -1,3 +1,18 @@
+export function stripInstallmentFromDescription(description: string): string {
+  return description
+    .replace(/\s*-\s*parcela\s+\d{1,2}\/\d{1,2}\s*$/i, "")
+    .replace(/\s+parcela\s+\d{1,2}\/\d{1,2}\s*$/i, "")
+    .replace(/\s+(\d{1,2})\/(\d{1,2})\s*$/, (match, currentRaw, totalRaw) => {
+      const current = Number(currentRaw);
+      const total = Number(totalRaw);
+      if (current >= 1 && current <= total && total <= 48) {
+        return "";
+      }
+      return match;
+    })
+    .trim();
+}
+
 export function extractInstallmentFromTitle(
   title: string
 ): { current: number; total: number } | null {
