@@ -1,4 +1,8 @@
 import { describe, expect, it } from "vitest";
+import {
+  computeSharedBaseProjections,
+  type CashFlowProjectionData,
+} from "@/lib/cash-flow/compute-projection";
 import { projectCashFlow } from "@/lib/cash-flow/project";
 
 describe("projectCashFlow", () => {
@@ -189,5 +193,47 @@ describe("projectCashFlow", () => {
 
     expect(projections[1].variableEstimated).toBe(true);
     expect(projections[1].variableCents).toBeGreaterThan(0);
+  });
+});
+
+describe("computeSharedBaseProjections", () => {
+  it("ignores scenario variables and tracked slots", () => {
+    const data: CashFlowProjectionData = {
+      settings: {
+        id: "1",
+        user_id: "u",
+        household_id: null,
+        scope: "personal",
+        opening_balance_cents: 0,
+        monthly_variable_projection_cents: 0,
+        projection_months: 12,
+        default_estimation_method: "none",
+        created_at: "",
+      },
+      previousMonthClosingCents: -1284700,
+      historyMonth: "2026-06",
+      monthInputs: [
+        {
+          referenceMonth: "2026-07",
+          incomeCents: 2192900,
+          fixedCents: 1187200,
+          cardCents: 518671,
+          variableSlots: [
+            {
+              categoryId: "cat1",
+              amountCents: null,
+              isTracked: true,
+              estimationMethod: "none",
+            },
+          ],
+        },
+      ],
+      historicalByCategory: new Map(),
+    };
+
+    const base = computeSharedBaseProjections(data);
+    expect(base[0].openingBalanceCents).toBe(-1284700);
+    expect(base[0].variableCents).toBe(0);
+    expect(base[0].closingBalanceCents).toBe(-797671);
   });
 });

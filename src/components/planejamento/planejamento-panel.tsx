@@ -13,7 +13,7 @@ import type {
   Category,
   BudgetVariableExpense,
 } from "@/types/database";
-import type { MonthInput } from "@/lib/cash-flow/project";
+import type { MonthInput, MonthProjection } from "@/lib/cash-flow/project";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -27,6 +27,7 @@ export function PlanejamentoPanel({
   settings,
   cardCents,
   monthInputs,
+  baseProjections,
   scenarios,
   cardGrid,
   historyMonth,
@@ -41,6 +42,7 @@ export function PlanejamentoPanel({
   settings: CashFlowSettings;
   cardCents: number;
   monthInputs: MonthInput[];
+  baseProjections: MonthProjection[];
   scenarios: ScenarioProjectionResult[];
   cardGrid: {
     months: string[];
@@ -97,6 +99,7 @@ export function PlanejamentoPanel({
         <CashFlowProjectionTab
           settings={settings}
           monthInputs={monthInputs}
+          baseProjections={baseProjections}
           scenarios={scenarios}
           cardGrid={cardGrid}
         />

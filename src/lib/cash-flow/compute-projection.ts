@@ -41,3 +41,16 @@ export function computeBaseProjections(
 ): MonthProjection[] {
   return projectCashFlow(projectionParams(data));
 }
+
+/** Receitas + fixos + cartão + saldo inicial — sem variáveis nem cenários. */
+export function computeSharedBaseProjections(
+  data: CashFlowProjectionData
+): MonthProjection[] {
+  return projectCashFlow({
+    ...projectionParams(data),
+    months: data.monthInputs.map((month) => ({
+      ...month,
+      variableSlots: [],
+    })),
+  });
+}

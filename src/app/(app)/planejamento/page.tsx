@@ -7,7 +7,7 @@ import {
   getOrCreateCashFlowSettings,
 } from "@/lib/actions/cash-flow";
 import { listProjectionScenarios } from "@/lib/actions/projection-scenarios";
-import { computeScenarioProjections } from "@/lib/cash-flow/compute-projection";
+import { computeScenarioProjections, computeSharedBaseProjections } from "@/lib/cash-flow/compute-projection";
 import { toReferenceMonth } from "@/lib/utils";
 
 export default async function PlanejamentoPage({
@@ -32,6 +32,8 @@ export default async function PlanejamentoPage({
   const ref = toReferenceMonth(year, month);
   const monthInput = projectionData.monthInputs.find((p) => p.referenceMonth === ref);
   const cardCents = monthInput?.cardCents ?? 0;
+
+  const baseProjections = computeSharedBaseProjections(projectionData);
 
   const scenarioResults = scenarios.map((scenario) => {
     const monthValues: Record<string, number> = {};
@@ -64,6 +66,7 @@ export default async function PlanejamentoPage({
         settings={settings}
         cardCents={cardCents}
         monthInputs={projectionData.monthInputs}
+        baseProjections={baseProjections}
         scenarios={scenarioResults}
         cardGrid={projectionData.cardGrid}
         historyMonth={projectionData.historyMonth}

@@ -3,7 +3,7 @@
 import { CardInstallmentGrid } from "@/components/planejamento/card-installment-grid";
 import { ScenarioTabs, type ScenarioProjectionResult } from "@/components/planejamento/scenario-tabs";
 import { ScenariosPdfExport } from "@/components/planejamento/scenarios-pdf-export";
-import type { MonthInput } from "@/lib/cash-flow/project";
+import type { MonthInput, MonthProjection } from "@/lib/cash-flow/project";
 import type { Card as CreditCard, CashFlowSettings } from "@/types/database";
 import { formatCurrency } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,11 +11,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 export function CashFlowProjectionTab({
   settings,
   monthInputs,
+  baseProjections,
   scenarios,
   cardGrid,
 }: {
   settings: CashFlowSettings;
   monthInputs: MonthInput[];
+  baseProjections: MonthProjection[];
   scenarios: ScenarioProjectionResult[];
   cardGrid: {
     months: string[];
@@ -28,7 +30,7 @@ export function CashFlowProjectionTab({
   };
 }) {
   const firstMonth = monthInputs[0];
-  const firstProjection = scenarios[0]?.projections[0];
+  const baseFirstMonth = baseProjections[0];
 
   return (
     <div className="space-y-6">
@@ -36,7 +38,8 @@ export function CashFlowProjectionTab({
         <div>
           <h2 className="text-lg font-semibold">Base compartilhada</h2>
           <p className="text-sm text-muted-foreground">
-            Receitas, fixos e cartão são iguais em todos os cenários.
+            Saldo inicial + receitas − fixos − cartão = saldo final (sem variáveis). Os cenários
+            abaixo aplicam os gastos variáveis em cima disso.
           </p>
         </div>
         <ScenariosPdfExport
@@ -48,7 +51,7 @@ export function CashFlowProjectionTab({
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-        {firstProjection ? (
+        {baseFirstMonth ? (
           <>
             <Card>
               <CardHeader className="pb-2">
@@ -58,12 +61,12 @@ export function CashFlowProjectionTab({
               </CardHeader>
               <CardContent
                 className={`text-xl font-bold ${
-                  firstProjection.openingBalanceCents >= 0
+                  baseFirstMonth.openingBalanceCents >= 0
                     ? "text-emerald-600"
                     : "text-red-600"
                 }`}
               >
-                {formatCurrency(firstProjection.openingBalanceCents)}
+                {formatCurrency(baseFirstMonth.openingBalanceCents)}
               </CardContent>
             </Card>
             <Card>
@@ -74,12 +77,15 @@ export function CashFlowProjectionTab({
               </CardHeader>
               <CardContent
                 className={`text-xl font-bold ${
-                  firstProjection.closingBalanceCents >= 0
+                  baseFirstMonth.closingBalanceCents >= 0
                     ? "text-emerald-600"
                     : "text-red-600"
                 }`}
               >
-                {formatCurrency(firstProjection.closingBalanceCents)}
+                {formatCurrency(baseFirstMonth.closingBalanceCents)}
+              </CardContent>
+              <CardContent className="pt-0 text-xs text-muted-foreground">
+                Antes dos gastos variáveis dos cenários
               </CardContent>
             </Card>
           </>
@@ -113,6 +119,17 @@ export function CashFlowProjectionTab({
           </>
         ) : null}
       </div>
+
+      {baseFirstMonth && firstMonth ? (
+        <p className="text-sm text-muted-foreground">
+          {formatCurrency(baseFirstMonth.openingBalanceCents)} +{" "}
+          {formatCurrency(firstMonth.incomeCents)} − {formatCurrency(firstMonth.fixedCents)} −{" "}
+          {formatCurrency(firstMonth.cardCents)} ={" "}
+          <strong className="text-foreground">
+            {formatCurrency(baseFirstMonth.closingBalanceCents)}
+          </strong>
+        </p>
+      ) : null}
 
       <CardInstallmentGrid
         months={cardGrid.months}
