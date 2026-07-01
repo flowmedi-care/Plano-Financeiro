@@ -41,6 +41,140 @@ export function formatReferenceMonthLabel(month: string): string {
   return date.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
 }
 
+export function formatReferenceMonthShort(month: string): string {
+  const [year, monthNumber] = month.split("-");
+  const date = new Date(Number(year), Number(monthNumber) - 1, 1);
+  return date
+    .toLocaleDateString("pt-BR", { month: "short" })
+    .replace(/\.$/, "");
+}
+
+export function getPreviousReferenceMonth(
+  allTransactions: Transaction[],
+  currentMonth: string
+): string | null {
+  const months = [
+    ...new Set(allTransactions.map((tx) => getTransactionReferenceMonth(tx))),
+  ].sort();
+  const index = months.indexOf(currentMonth);
+  if (index <= 0) return null;
+  return months[index - 1];
+}
+
+export type MonthComparisonScope =
+  | { type: "all" }
+  | { type: "self" }
+  | { type: "person"; personId: string };
+
+function filterByReferenceMonth(
+  transactions: Transaction[],
+  month: string
+): Transaction[] {
+  return transactions.filter(
+    (tx) => getTransactionReferenceMonth(tx) === month
+  );
+}
+
+export function computeSelfByCategoryDetailed(
+  selfTransactions: SelfTransaction[]
+): CategorySpendingDetail[] {
+  const map = new Map<string, CategorySpendingDetail>();
+
+  for (const { transaction: tx, selfCents } of selfTransactions) {
+    const key = tx.category_id ?? "__uncategorized__";
+    const current = map.get(key) ?? {
+      categoryId: tx.category_id,
+      name: tx.category?.name ?? "Sem categoria",
+      color: tx.category?.color ?? "#94a3b8",
+      total: 0,
+    };
+    current.total += selfCents;
+    map.set(key, current);
+  }
+
+  return Array.from(map.values()).sort((a, b) => b.total - a.total);
+}
+
+export function computeOwedByCategoryDetailed(
+  owedTransactions: PersonOwedTransaction[]
+): CategorySpendingDetail[] {
+  const map = new Map<string, CategorySpendingDetail>();
+
+  for (const { transaction: tx, owedCents } of owedTransactions) {
+    const key = tx.category_id ?? "__uncategorized__";
+    const current = map.get(key) ?? {
+      categoryId: tx.category_id,
+      name: tx.category?.name ?? "Sem categoria",
+      color: tx.category?.color ?? "#94a3b8",
+      total: 0,
+    };
+    current.total += owedCents;
+    map.set(key, current);
+  }
+
+  return Array.from(map.values()).sort((a, b) => b.total - a.total);
+}
+
+export function computeScopedMonthComparison(
+  allTransactions: Transaction[],
+  currentMonth: string,
+  previousMonth: string,
+  scope: MonthComparisonScope
+): CategoryMonthComparison[] {
+  const currentTxs = filterByReferenceMonth(allTransactions, currentMonth);
+  const previousTxs = filterByReferenceMonth(allTransactions, previousMonth);
+
+  let currentDetailed: CategorySpendingDetail[];
+  let previousDetailed: CategorySpendingDetail[];
+
+  if (scope.type === "all") {
+    currentDetailed = computeSpendingByCategoryDetailed(currentTxs);
+    previousDetailed = computeSpendingByCategoryDetailed(previousTxs);
+  } else if (scope.type === "self") {
+    currentDetailed = computeSelfByCategoryDetailed(
+      getSelfTransactions(currentTxs)
+    );
+    previousDetailed = computeSelfByCategoryDetailed(
+      getSelfTransactions(previousTxs)
+    );
+  } else {
+    currentDetailed = computeOwedByCategoryDetailed(
+      getPersonOwedTransactions(currentTxs, scope.personId)
+    );
+    previousDetailed = computeOwedByCategoryDetailed(
+      getPersonOwedTransactions(previousTxs, scope.personId)
+    );
+  }
+
+  return computeMonthOverMonthComparison(currentDetailed, previousDetailed);
+}
+
+export function resolveMonthComparison(
+  allTransactions: Transaction[],
+  monthFilter: string,
+  scope: MonthComparisonScope
+): {
+  currentMonth: string;
+  previousMonth: string;
+  items: CategoryMonthComparison[];
+} | null {
+  if (monthFilter === "all") return null;
+
+  const previousMonth = getPreviousReferenceMonth(allTransactions, monthFilter);
+  if (!previousMonth) return null;
+
+  return {
+    currentMonth: monthFilter,
+    previousMonth,
+    items: computeScopedMonthComparison(
+      allTransactions,
+      monthFilter,
+      previousMonth,
+      scope
+    ),
+  };
+}
+
 export function computeSpendingByCategoryDetailed(
   transactions: Transaction[]
 ): CategorySpendingDetail[] {

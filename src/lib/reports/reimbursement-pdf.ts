@@ -1,8 +1,9 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { formatCurrency } from "@/lib/utils";
-import type { CategorySpending } from "@/lib/transactions/summary";
+import type { CategoryMonthComparison, CategorySpending } from "@/lib/transactions/summary";
 import type { Transaction } from "@/types/database";
+import { renderGroupedBarChartToDataUrl } from "@/lib/reports/bar-chart-canvas";
 import { renderPieChartToDataUrl } from "@/lib/reports/pie-chart-canvas";
 
 export interface ReportLineItem {
@@ -50,6 +51,11 @@ export function generateSpendingReportPdf(params: {
   lineItems: ReportLineItem[];
   categoryBreakdown: CategorySpending[];
   filePrefix: string;
+  monthComparison?: {
+    previousMonthLabel: string;
+    currentMonthLabel: string;
+    items: CategoryMonthComparison[];
+  };
 }): void {
   const {
     recipientName,
@@ -60,6 +66,7 @@ export function generateSpendingReportPdf(params: {
     lineItems,
     categoryBreakdown,
     filePrefix,
+    monthComparison,
   } = params;
 
   const totalAmount = lineItems.reduce((sum, item) => sum + item.amountCents, 0);
@@ -133,6 +140,60 @@ export function generateSpendingReportPdf(params: {
   });
 
   y = getFinalY(doc, y) + 10;
+
+  if (monthComparison && monthComparison.items.length > 0) {
+    if (y > 200) {
+      doc.addPage();
+      y = 18;
+    }
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.text("Comparação com fatura anterior", 14, y);
+    y += 4;
+
+    const comparisonPoints = monthComparison.items
+      .filter(
+        (item) =>
+          item.delta !== 0 || item.currentTotal > 0 || item.previousTotal > 0
+      )
+      .slice(0, 8)
+      .map((item) => ({
+        label: item.name,
+        previousValue: item.previousTotal,
+        currentValue: item.currentTotal,
+      }));
+
+    const comparisonImage = renderGroupedBarChartToDataUrl(comparisonPoints, {
+      previousLabel: monthComparison.previousMonthLabel,
+      currentLabel: monthComparison.currentMonthLabel,
+    });
+
+    if (comparisonImage) {
+      doc.addImage(comparisonImage, "PNG", 14, y, 182, 68);
+      y += 74;
+    }
+
+    autoTable(doc, {
+      startY: y,
+      head: [["Categoria", monthComparison.previousMonthLabel, monthComparison.currentMonthLabel, "Variação"]],
+      body: monthComparison.items.map((item) => {
+        const sign = item.delta > 0 ? "+" : item.delta < 0 ? "−" : "";
+        return [
+          item.name,
+          formatCurrency(item.previousTotal),
+          formatCurrency(item.currentTotal),
+          `${sign}${formatCurrency(Math.abs(item.delta))}`,
+        ];
+      }),
+      theme: "grid",
+      headStyles: { fillColor: [100, 116, 139] },
+      styles: { fontSize: 9 },
+      margin: { left: 14, right: 14 },
+    });
+
+    y = getFinalY(doc, y) + 10;
+  }
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);

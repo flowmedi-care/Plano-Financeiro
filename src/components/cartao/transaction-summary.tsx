@@ -1,7 +1,9 @@
 "use client";
 
+import { useMemo } from "react";
 import type { Person, Transaction } from "@/types/database";
-import { computeTransactionSummary } from "@/lib/transactions/summary";
+import { computeTransactionSummary, resolveMonthComparison } from "@/lib/transactions/summary";
+import { MonthCategoryComparisonChart } from "@/components/charts/month-category-comparison";
 import { formatCurrency } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -15,14 +17,20 @@ function formatMonthLabel(monthFilter: string): string {
 
 export function TransactionSummary({
   transactions,
+  allTransactions,
   people,
   monthFilter,
 }: {
   transactions: Transaction[];
+  allTransactions: Transaction[];
   people: Person[];
   monthFilter: string;
 }) {
   const summary = computeTransactionSummary(transactions, people);
+  const monthComparison = useMemo(
+    () => resolveMonthComparison(allTransactions, monthFilter, { type: "all" }),
+    [allTransactions, monthFilter]
+  );
 
   if (transactions.length === 0) {
     return (
@@ -40,12 +48,13 @@ export function TransactionSummary({
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Relatório — {formatMonthLabel(monthFilter)}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="grid gap-6 md:grid-cols-2">
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle>Relatório — {formatMonthLabel(monthFilter)}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-6 md:grid-cols-2">
           <div className="space-y-3">
             <h3 className="text-sm font-medium text-muted-foreground">Por conta</h3>
             <div className="flex justify-between">
@@ -90,8 +99,17 @@ export function TransactionSummary({
               <span>{formatCurrency(summary.selfTotal)}</span>
             </div>
           </div>
-        </div>
-      </CardContent>
-    </Card>
+          </div>
+        </CardContent>
+      </Card>
+
+      {monthComparison ? (
+        <MonthCategoryComparisonChart
+          currentMonth={monthComparison.currentMonth}
+          previousMonth={monthComparison.previousMonth}
+          items={monthComparison.items}
+        />
+      ) : null}
+    </>
   );
 }

@@ -8,6 +8,7 @@ import {
   getPersonOwedTransactions,
   getSelfTransactions,
   groupTransactionsByCategory,
+  resolveMonthComparison,
 } from "@/lib/transactions/summary";
 import type { Person, Transaction } from "@/types/database";
 
@@ -129,5 +130,36 @@ describe("computeMonthOverMonthComparison", () => {
 
     expect(lazer?.delta).toBe(5000);
     expect(mercado?.delta).toBe(-4000);
+  });
+});
+
+describe("resolveMonthComparison", () => {
+  it("scopes comparison to self spending", () => {
+    const transactions: Transaction[] = [
+      {
+        id: "1",
+        reference_month: "2026-05",
+        amount_cents: 10000,
+        category_id: "cat-a",
+        category: { id: "cat-a", name: "Lazer", color: "#f00" },
+        splits: [{ person_id: "p1", amount_cents: 4000 }],
+      } as Transaction,
+      {
+        id: "2",
+        reference_month: "2026-06",
+        amount_cents: 12000,
+        category_id: "cat-a",
+        category: { id: "cat-a", name: "Lazer", color: "#f00" },
+        splits: [{ person_id: "p1", amount_cents: 2000 }],
+      } as Transaction,
+    ];
+
+    const result = resolveMonthComparison(transactions, "2026-06", {
+      type: "self",
+    });
+
+    expect(result?.previousMonth).toBe("2026-05");
+    expect(result?.items[0]?.previousTotal).toBe(6000);
+    expect(result?.items[0]?.currentTotal).toBe(10000);
   });
 });

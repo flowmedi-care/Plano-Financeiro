@@ -62,7 +62,7 @@ const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
         __html: colorConfig
           .map(
             ([key, item]) =>
-              `[data-chart=${id}] .color-${key} { --color-${key}: ${item.color}; }`
+              `[data-chart=${id}] { --color-${key}: ${item.color}; }\n[data-chart=${id}] .color-${key} { --color-${key}: ${item.color}; }`
           )
           .join("\n"),
       }}

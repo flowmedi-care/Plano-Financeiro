@@ -354,12 +354,14 @@ export function TransactionTable({
 
       <TransactionSummary
         transactions={filtered}
+        allTransactions={transactions}
         people={people}
         monthFilter={monthFilter}
       />
 
       <ReimbursementPdfExport
         transactions={filtered}
+        allTransactions={transactions}
         people={people}
         monthFilter={monthFilter}
       />

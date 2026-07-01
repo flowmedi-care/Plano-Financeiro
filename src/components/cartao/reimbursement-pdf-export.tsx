@@ -7,10 +7,14 @@ import {
   computeOwedByCategory,
   computeSelfByCategory,
   computeTransactionSummary,
+  formatReferenceMonthLabel,
+  formatReferenceMonthShort,
   getPersonOwedTransactions,
   getSelfTransactions,
+  resolveMonthComparison,
 } from "@/lib/transactions/summary";
 import { generateSpendingReportPdf } from "@/lib/reports/reimbursement-pdf";
+import { MonthCategoryComparisonChart } from "@/components/charts/month-category-comparison";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -27,17 +31,17 @@ const SELF_OPTION_ID = "__self__";
 
 function formatMonthLabel(monthFilter: string): string {
   if (monthFilter === "all") return "Todas as faturas";
-  const [year, month] = monthFilter.split("-").map(Number);
-  const date = new Date(year, month - 1, 1);
-  return date.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+  return formatReferenceMonthLabel(monthFilter);
 }
 
 export function ReimbursementPdfExport({
   transactions,
+  allTransactions,
   people,
   monthFilter,
 }: {
   transactions: Transaction[];
+  allTransactions: Transaction[];
   people: Person[];
   monthFilter: string;
 }) {
@@ -67,8 +71,30 @@ export function ReimbursementPdfExport({
       ? people.find((p) => p.id === selectedId)
       : null;
 
+  const monthComparison = useMemo(() => {
+    if (selectedId === SELF_OPTION_ID) {
+      return resolveMonthComparison(allTransactions, monthFilter, { type: "self" });
+    }
+    if (!selectedId) return null;
+    return resolveMonthComparison(allTransactions, monthFilter, {
+      type: "person",
+      personId: selectedId,
+    });
+  }, [allTransactions, monthFilter, selectedId]);
+
+  function buildMonthComparisonPdf() {
+    if (!monthComparison) return undefined;
+
+    return {
+      previousMonthLabel: formatReferenceMonthShort(monthComparison.previousMonth),
+      currentMonthLabel: formatReferenceMonthShort(monthComparison.currentMonth),
+      items: monthComparison.items,
+    };
+  }
+
   function handleExport() {
     const monthLabel = formatMonthLabel(monthFilter);
+    const monthComparisonPdf = buildMonthComparisonPdf();
 
     if (selectedId === SELF_OPTION_ID) {
       const selfTransactions = getSelfTransactions(transactions);
@@ -91,6 +117,7 @@ export function ReimbursementPdfExport({
           })),
           categoryBreakdown: computeSelfByCategory(selfTransactions),
           filePrefix: "gastos-eu",
+          monthComparison: monthComparisonPdf,
         });
         toast.success("PDF gerado");
       } catch (error) {
@@ -117,7 +144,7 @@ export function ReimbursementPdfExport({
     try {
       generateSpendingReportPdf({
         recipientName: selectedPerson.name,
-        reportTitle: "Relatório de Reembolso",
+        reportTitle: "Relatório de Gastos",
         totalLabel: "Total a pagar",
         amountColumnLabel: "A pagar",
         monthLabel,
@@ -127,6 +154,7 @@ export function ReimbursementPdfExport({
         })),
         categoryBreakdown: computeOwedByCategory(owedTransactions),
         filePrefix: "reembolso",
+        monthComparison: monthComparisonPdf,
       });
       toast.success("PDF gerado");
     } catch (error) {
@@ -139,42 +167,57 @@ export function ReimbursementPdfExport({
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Exportar relatório (PDF)</CardTitle>
-        <p className="text-sm text-muted-foreground">
-          Gera um relatório com transações, totais por categoria e gráfico — para cobrança ou para ver seus gastos.
-        </p>
-      </CardHeader>
-      <CardContent className="flex flex-wrap items-end gap-4">
-        <div className="space-y-2">
-          <Label>Pessoa</Label>
-          <Select
-            value={selectedId || defaultSelection}
-            onValueChange={setSelectedId}
-          >
-            <SelectTrigger className="w-[220px]">
-              <SelectValue placeholder="Selecione" />
-            </SelectTrigger>
-            <SelectContent>
-              {hasSelfSpending ? (
-                <SelectItem value={SELF_OPTION_ID}>
-                  Eu (meus gastos)
-                </SelectItem>
-              ) : null}
-              {peopleWithDebt.map((person) => (
-                <SelectItem key={person.id} value={person.id}>
-                  {person.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <Button onClick={handleExport} variant="outline">
-          <FileDown className="mr-2 h-4 w-4" />
-          Baixar PDF
-        </Button>
-      </CardContent>
-    </Card>
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>Exportar relatório (PDF)</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Gera um relatório com transações, totais por categoria, comparação com a fatura anterior e gráfico — para cobrança ou para ver seus gastos.
+          </p>
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-end gap-4">
+          <div className="space-y-2">
+            <Label>Pessoa</Label>
+            <Select
+              value={selectedId || defaultSelection}
+              onValueChange={setSelectedId}
+            >
+              <SelectTrigger className="w-[220px]">
+                <SelectValue placeholder="Selecione" />
+              </SelectTrigger>
+              <SelectContent>
+                {hasSelfSpending ? (
+                  <SelectItem value={SELF_OPTION_ID}>
+                    Eu (meus gastos)
+                  </SelectItem>
+                ) : null}
+                {peopleWithDebt.map((person) => (
+                  <SelectItem key={person.id} value={person.id}>
+                    {person.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <Button onClick={handleExport} variant="outline">
+            <FileDown className="mr-2 h-4 w-4" />
+            Baixar PDF
+          </Button>
+        </CardContent>
+      </Card>
+
+      {monthComparison ? (
+        <MonthCategoryComparisonChart
+          currentMonth={monthComparison.currentMonth}
+          previousMonth={monthComparison.previousMonth}
+          items={monthComparison.items}
+          title={
+            selectedId === SELF_OPTION_ID
+              ? "Comparação — meus gastos"
+              : `Comparação — ${selectedPerson?.name ?? "pessoa"}`
+          }
+        />
+      ) : null}
+    </div>
   );
 }
