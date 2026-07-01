@@ -90,6 +90,23 @@ export async function updateCashFlowSettings(params: {
   revalidatePath("/planejamento");
 }
 
+export async function setMonthClosingBalance(params: {
+  year: number;
+  month: number;
+  closingBalanceCents: number | null;
+}) {
+  const supabase = await createClient();
+  const budgetMonth = await getOrCreateBudgetMonth(params.year, params.month);
+
+  const { error } = await supabase
+    .from("budget_months")
+    .update({ closing_balance_cents: params.closingBalanceCents })
+    .eq("id", budgetMonth.id);
+
+  if (error) throw new Error(error.message);
+  revalidatePath("/planejamento");
+}
+
 export async function getCashFlowTemplates() {
   const supabase = await createClient();
   const { profile, scope, householdId } = await getScopeContext();
@@ -649,7 +666,17 @@ export async function loadCashFlowProjectionData(
 
   const cardGrid = await getCardProjectionGrid(startYear, startMonth);
 
-  return { settings, monthInputs, historicalByCategory, cardGrid };
+  const [historyYear, historyMonthNum] = cardGrid.historyMonth.split("-").map(Number);
+  const historyBudgetMonth = await getOrCreateBudgetMonth(historyYear, historyMonthNum);
+
+  return {
+    settings,
+    monthInputs,
+    historicalByCategory,
+    cardGrid,
+    previousMonthClosingCents: historyBudgetMonth.closing_balance_cents ?? null,
+    historyMonth: cardGrid.historyMonth,
+  };
 }
 
 export async function getCashFlowProjection(startYear: number, startMonth: number) {

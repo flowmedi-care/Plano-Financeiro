@@ -24,6 +24,8 @@ export interface MonthProjection {
   variableHasUndefined: boolean;
   variableEstimated: boolean;
   monthBalanceCents: number;
+  openingBalanceCents: number;
+  closingBalanceCents: number;
   cumulativeBalanceCents: number;
   isPositiveMonth: boolean;
 }
@@ -58,6 +60,7 @@ export function buildMonthRange(
 export function projectCashFlow(params: {
   months: MonthInput[];
   openingBalanceCents: number;
+  previousMonthClosingCents?: number | null;
   resolveScenarioVariable?: (referenceMonth: string) => number;
   historicalByCategory: Map<string, Map<string, number>>;
   defaultEstimationMethod: EstimationMethod;
@@ -65,6 +68,7 @@ export function projectCashFlow(params: {
   const {
     months,
     openingBalanceCents,
+    previousMonthClosingCents,
     resolveScenarioVariable,
     historicalByCategory,
     defaultEstimationMethod,
@@ -85,7 +89,7 @@ export function projectCashFlow(params: {
 
   const surplusPerCategory = estimateSurplusAllocation(freeMonths, trackedCount);
 
-  let cumulative = openingBalanceCents;
+  let opening = params.previousMonthClosingCents ?? openingBalanceCents;
   const results: MonthProjection[] = [];
 
   for (const month of months) {
@@ -128,7 +132,7 @@ export function projectCashFlow(params: {
 
     const monthBalance =
       month.incomeCents - month.fixedCents - month.cardCents - variableCents;
-    cumulative += monthBalance;
+    const closing = opening + monthBalance;
 
     results.push({
       referenceMonth: month.referenceMonth,
@@ -139,9 +143,13 @@ export function projectCashFlow(params: {
       variableHasUndefined,
       variableEstimated,
       monthBalanceCents: monthBalance,
-      cumulativeBalanceCents: cumulative,
-      isPositiveMonth: cumulative > 0,
+      openingBalanceCents: opening,
+      closingBalanceCents: closing,
+      cumulativeBalanceCents: closing,
+      isPositiveMonth: closing > 0,
     });
+
+    opening = closing;
   }
 
   return results;

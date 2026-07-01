@@ -28,6 +28,7 @@ export function CashFlowProjectionTab({
   };
 }) {
   const firstMonth = monthInputs[0];
+  const firstProjection = scenarios[0]?.projections[0];
 
   return (
     <div className="space-y-6">
@@ -46,15 +47,43 @@ export function CashFlowProjectionTab({
         />
       </div>
 
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">Saldo inicial</CardTitle>
-          </CardHeader>
-          <CardContent className="text-xl font-bold">
-            {formatCurrency(settings.opening_balance_cents)}
-          </CardContent>
-        </Card>
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+        {firstProjection ? (
+          <>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm text-muted-foreground">
+                  Saldo inicial (1º mês)
+                </CardTitle>
+              </CardHeader>
+              <CardContent
+                className={`text-xl font-bold ${
+                  firstProjection.openingBalanceCents >= 0
+                    ? "text-emerald-600"
+                    : "text-red-600"
+                }`}
+              >
+                {formatCurrency(firstProjection.openingBalanceCents)}
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm text-muted-foreground">
+                  Saldo final (1º mês)
+                </CardTitle>
+              </CardHeader>
+              <CardContent
+                className={`text-xl font-bold ${
+                  firstProjection.closingBalanceCents >= 0
+                    ? "text-emerald-600"
+                    : "text-red-600"
+                }`}
+              >
+                {formatCurrency(firstProjection.closingBalanceCents)}
+              </CardContent>
+            </Card>
+          </>
+        ) : null}
         {firstMonth ? (
           <>
             <Card>

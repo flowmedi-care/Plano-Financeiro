@@ -11,6 +11,18 @@ export interface CashFlowProjectionData {
   settings: CashFlowSettings;
   monthInputs: MonthInput[];
   historicalByCategory: Map<string, Map<string, number>>;
+  previousMonthClosingCents: number | null;
+  historyMonth: string;
+}
+
+function projectionParams(data: CashFlowProjectionData) {
+  return {
+    months: data.monthInputs,
+    openingBalanceCents: data.settings.opening_balance_cents,
+    previousMonthClosingCents: data.previousMonthClosingCents,
+    historicalByCategory: data.historicalByCategory,
+    defaultEstimationMethod: data.settings.default_estimation_method,
+  };
 }
 
 export function computeScenarioProjections(
@@ -18,22 +30,14 @@ export function computeScenarioProjections(
   scenario: ProjectionScenarioWithValues
 ): MonthProjection[] {
   return projectCashFlow({
-    months: data.monthInputs,
-    openingBalanceCents: data.settings.opening_balance_cents,
+    ...projectionParams(data),
     resolveScenarioVariable: (referenceMonth) =>
       resolveScenarioVariable(scenario, referenceMonth),
-    historicalByCategory: data.historicalByCategory,
-    defaultEstimationMethod: data.settings.default_estimation_method,
   });
 }
 
 export function computeBaseProjections(
   data: CashFlowProjectionData
 ): MonthProjection[] {
-  return projectCashFlow({
-    months: data.monthInputs,
-    openingBalanceCents: data.settings.opening_balance_cents,
-    historicalByCategory: data.historicalByCategory,
-    defaultEstimationMethod: data.settings.default_estimation_method,
-  });
+  return projectCashFlow(projectionParams(data));
 }

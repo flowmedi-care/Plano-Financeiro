@@ -163,6 +163,7 @@ export interface BudgetMonth {
   scope: ScopeType;
   year: number;
   month: number;
+  closing_balance_cents: number | null;
   created_at: string;
 }
 

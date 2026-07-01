@@ -66,6 +66,8 @@ export default async function PlanejamentoPage({
         monthInputs={projectionData.monthInputs}
         scenarios={scenarioResults}
         cardGrid={projectionData.cardGrid}
+        historyMonth={projectionData.historyMonth}
+        previousMonthClosingCents={projectionData.previousMonthClosingCents}
       />
     </div>
   );

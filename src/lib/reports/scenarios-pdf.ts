@@ -47,7 +47,10 @@ function cashFlowTableStyles(
       if (data.column.index === 5 && row.monthBalanceCents < 0) {
         data.cell.styles.textColor = RED;
       }
-      if (data.column.index === 6 && row.cumulativeBalanceCents < 0) {
+      if (data.column.index === 6 && row.openingBalanceCents < 0) {
+        data.cell.styles.textColor = RED;
+      }
+      if (data.column.index === 7 && row.closingBalanceCents < 0) {
         data.cell.styles.textColor = RED;
       }
     },
@@ -239,7 +242,7 @@ export function generateScenariosReportPdf(params: {
 
     autoTable(doc, {
       startY: y,
-      head: [["Mês", "Receitas", "Fixos", "Cartão", "Variáveis", "Saldo mês", "Acumulado"]],
+      head: [["Mês", "Receitas", "Fixos", "Cartão", "Variáveis", "Saldo mês", "Saldo inicial", "Saldo final"]],
       body: projections.map((row) => [
         formatReferenceMonthLabel(row.referenceMonth),
         formatCurrency(row.incomeCents),
@@ -247,7 +250,8 @@ export function generateScenariosReportPdf(params: {
         formatCurrency(row.cardCents),
         formatCurrency(row.variableCents),
         formatCurrency(row.monthBalanceCents),
-        formatCurrency(row.cumulativeBalanceCents),
+        formatCurrency(row.openingBalanceCents),
+        formatCurrency(row.closingBalanceCents),
       ]),
       ...cashFlowTableStyles(projections),
     });

@@ -29,6 +29,8 @@ export function PlanejamentoPanel({
   monthInputs,
   scenarios,
   cardGrid,
+  historyMonth,
+  previousMonthClosingCents,
 }: {
   year: number;
   month: number;
@@ -49,6 +51,8 @@ export function PlanejamentoPanel({
     focusMonth: string;
     historyMonth: string;
   };
+  historyMonth: string;
+  previousMonthClosingCents: number | null;
 }) {
   const [tab, setTab] = useState<"entries" | "flow">("flow");
 
@@ -72,7 +76,11 @@ export function PlanejamentoPanel({
         </div>
       </div>
 
-      <ProjectionSettingsForm settings={settings} />
+      <ProjectionSettingsForm
+        settings={settings}
+        historyMonth={historyMonth}
+        previousMonthClosingCents={previousMonthClosingCents}
+      />
 
       <div className={cn(tab === "entries" ? "block" : "hidden")}>
         <CashFlowEntriesTab

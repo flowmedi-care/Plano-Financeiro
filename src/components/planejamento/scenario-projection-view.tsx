@@ -54,7 +54,8 @@ export function ScenarioProjectionView({
                 <TableHead className="text-right">Cartão</TableHead>
                 <TableHead className="text-right">Variáveis</TableHead>
                 <TableHead className="text-right">Saldo mês</TableHead>
-                <TableHead className="text-right">Acumulado</TableHead>
+                <TableHead className="text-right">Saldo inicial</TableHead>
+                <TableHead className="text-right">Saldo final</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -83,11 +84,18 @@ export function ScenarioProjectionView({
                     {formatCurrency(row.monthBalanceCents)}
                   </TableCell>
                   <TableCell
-                    className={`text-right font-medium ${
-                      row.cumulativeBalanceCents >= 0 ? "text-emerald-600" : "text-red-600"
+                    className={`text-right ${
+                      row.openingBalanceCents >= 0 ? "text-emerald-600" : "text-red-600"
                     }`}
                   >
-                    {formatCurrency(row.cumulativeBalanceCents)}
+                    {formatCurrency(row.openingBalanceCents)}
+                  </TableCell>
+                  <TableCell
+                    className={`text-right font-medium ${
+                      row.closingBalanceCents >= 0 ? "text-emerald-600" : "text-red-600"
+                    }`}
+                  >
+                    {formatCurrency(row.closingBalanceCents)}
                   </TableCell>
                 </TableRow>
               ))}
