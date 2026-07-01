@@ -42,9 +42,12 @@ export function PlanejamentoPanel({
   scenarios: ScenarioProjectionResult[];
   cardGrid: {
     months: string[];
+    futureMonths: string[];
     cards: Card[];
     values: Record<string, number>;
     totalsByMonth: Record<string, number>;
+    focusMonth: string;
+    historyMonth: string;
   };
 }) {
   const [tab, setTab] = useState<"entries" | "flow">("flow");

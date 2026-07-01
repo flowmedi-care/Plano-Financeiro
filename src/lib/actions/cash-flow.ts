@@ -7,7 +7,11 @@ import { getProfile } from "@/lib/actions/profile";
 import { getOrCreateBudgetMonth } from "@/lib/actions/budget";
 import { getAllCards } from "@/lib/actions/cards";
 import { getTransactions } from "@/lib/actions/transactions";
-import { buildMonthRange, type MonthInput } from "@/lib/cash-flow/project";
+import {
+  buildMonthRange,
+  previousReferenceMonth,
+  type MonthInput,
+} from "@/lib/cash-flow/project";
 import {
   computeBaseProjections,
   type CashFlowProjectionData,
@@ -541,11 +545,14 @@ export async function saveCardProjectionGrid(
 
 export async function getCardProjectionGrid(startYear: number, startMonth: number) {
   const settings = await getOrCreateCashFlowSettings();
-  const months = buildMonthRange(
+  const focusMonth = toReferenceMonth(startYear, startMonth);
+  const historyMonth = previousReferenceMonth(focusMonth);
+  const futureMonths = buildMonthRange(
     startYear,
     startMonth,
     settings.projection_months
   );
+  const months = [historyMonth, ...futureMonths];
   const cards = await getAllCards();
   const supabase = await createClient();
 
@@ -572,7 +579,16 @@ export async function getCardProjectionGrid(startYear: number, startMonth: numbe
     }
   }
 
-  return { months, cards, values, totalsByMonth, projectionMonths: settings.projection_months };
+  return {
+    months,
+    futureMonths,
+    cards,
+    values,
+    totalsByMonth,
+    projectionMonths: settings.projection_months,
+    focusMonth,
+    historyMonth,
+  };
 }
 
 export async function loadCashFlowProjectionData(

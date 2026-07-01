@@ -37,9 +37,12 @@ export function CashFlowEntriesTab({
   cardCents: number;
   cardGrid: {
     months: string[];
+    futureMonths: string[];
     cards: CreditCard[];
     values: Record<string, number>;
     totalsByMonth: Record<string, number>;
+    focusMonth: string;
+    historyMonth: string;
   };
 }) {
   const [pending, startTransition] = useTransition();
@@ -66,6 +69,8 @@ export function CashFlowEntriesTab({
         cards={cardGrid.cards}
         values={cardGrid.values}
         totalsByMonth={cardGrid.totalsByMonth}
+        focusMonth={cardGrid.focusMonth}
+        historyMonth={cardGrid.historyMonth}
       />
 
       <div className="grid gap-4 md:grid-cols-5">

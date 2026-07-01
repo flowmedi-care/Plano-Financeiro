@@ -16,6 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 
 function formatMonthShort(referenceMonth: string): string {
   const [year, month] = referenceMonth.split("-").map(Number);
@@ -48,18 +49,36 @@ function buildLocalValues(
   return out;
 }
 
+function formatEvolutionPercent(current: number, previous: number): string | null {
+  if (previous <= 0) return null;
+  const pct = ((current - previous) / previous) * 100;
+  const sign = pct > 0 ? "+" : "";
+  return `${sign}${pct.toFixed(1).replace(".", ",")}%`;
+}
+
+function evolutionColor(current: number, previous: number): string {
+  if (previous <= 0 || current === previous) return "text-muted-foreground";
+  return current > previous ? "text-red-600" : "text-emerald-600";
+}
+
 export function CardInstallmentGrid({
   months,
   cards,
   values,
   totalsByMonth,
+  focusMonth,
+  historyMonth,
   readOnly = false,
+  lockHistory = false,
 }: {
   months: string[];
   cards: Card[];
   values: Record<string, number>;
   totalsByMonth: Record<string, number>;
+  focusMonth: string;
+  historyMonth: string;
   readOnly?: boolean;
+  lockHistory?: boolean;
 }) {
   const [pending, startTransition] = useTransition();
   const [localValues, setLocalValues] = useState(() =>
@@ -84,7 +103,16 @@ export function CardInstallmentGrid({
     return totals;
   }, [localValues, months, cards]);
 
+  const displayTotals = readOnly ? totalsByMonth : liveTotals;
+
+  function isMonthEditable(month: string): boolean {
+    if (readOnly) return false;
+    if (lockHistory && month === historyMonth) return false;
+    return true;
+  }
+
   function handleChange(cardId: string, month: string, raw: string) {
+    if (!isMonthEditable(month)) return;
     setLocalValues((prev) => ({
       ...prev,
       [cellKey(cardId, month)]: raw,
@@ -93,8 +121,9 @@ export function CardInstallmentGrid({
   }
 
   function handleSave() {
+    const editableMonths = months.filter(isMonthEditable);
     const cells = cards.flatMap((card) =>
-      months.map((month) => {
+      editableMonths.map((month) => {
         const raw = localValues[cellKey(card.id, month)]?.trim() ?? "";
         return {
           cardId: card.id,
@@ -124,29 +153,31 @@ export function CardInstallmentGrid({
     return (
       <UiCard>
         <CardHeader>
-          <CardTitle>Fatura por cartão (projeção)</CardTitle>
+          <CardTitle>Fatura por cartão</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground">
-            Cadastre cartões em Configurações para preencher a grade de projeção.
+            Cadastre cartões em Configurações para registrar as faturas mensais.
           </p>
         </CardContent>
       </UiCard>
     );
   }
 
-  const displayTotals = readOnly ? totalsByMonth : liveTotals;
+  const canEdit = !readOnly;
 
   return (
     <UiCard>
       <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-4">
         <div>
-          <CardTitle>Fatura por cartão (projeção)</CardTitle>
+          <CardTitle>Fatura por cartão</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Preencha os valores e clique em Salvar. Uma única gravação atualiza todos os meses.
+            {canEdit
+              ? `Preencha a fatura de ${formatMonthShort(focusMonth)} e acompanhe a evolução mês a mês. Clique em Salvar para gravar.`
+              : "Histórico e projeção das faturas por cartão."}
           </p>
         </div>
-        {!readOnly ? (
+        {canEdit ? (
           <div className="flex gap-2">
             <Button
               variant="outline"
@@ -170,8 +201,21 @@ export function CardInstallmentGrid({
                 Cartão
               </TableHead>
               {months.map((month) => (
-                <TableHead key={month} className="min-w-[100px] text-right">
-                  {formatMonthShort(month)}
+                <TableHead
+                  key={month}
+                  className={cn(
+                    "min-w-[100px] text-right",
+                    month === historyMonth && "text-muted-foreground"
+                  )}
+                >
+                  <div>{formatMonthShort(month)}</div>
+                  {month === historyMonth ? (
+                    <div className="text-[10px] font-normal normal-case">mês anterior</div>
+                  ) : month === focusMonth ? (
+                    <div className="text-[10px] font-normal normal-case text-primary">
+                      mês atual
+                    </div>
+                  ) : null}
                 </TableHead>
               ))}
             </TableRow>
@@ -182,36 +226,98 @@ export function CardInstallmentGrid({
                 <TableCell className="sticky left-0 z-10 bg-background font-medium">
                   {cardLabel(card)}
                 </TableCell>
-                {months.map((month) => (
-                  <TableCell key={month} className="p-1 text-right">
-                    {readOnly ? (
-                      <span className="text-sm">
-                        {values[cellKey(card.id, month)]
-                          ? formatCurrency(values[cellKey(card.id, month)])
-                          : "—"}
-                      </span>
-                    ) : (
-                      <Input
-                        className="h-8 w-[96px] text-right text-sm"
-                        placeholder="—"
-                        disabled={pending}
-                        value={localValues[cellKey(card.id, month)] ?? ""}
-                        onChange={(e) => handleChange(card.id, month, e.target.value)}
-                      />
-                    )}
-                  </TableCell>
-                ))}
+                {months.map((month, monthIndex) => {
+                  const cents = values[cellKey(card.id, month)];
+                  const editable = isMonthEditable(month);
+                  const prevMonth = monthIndex > 0 ? months[monthIndex - 1] : null;
+                  const currentCents = readOnly
+                    ? cents ?? 0
+                    : (() => {
+                        const raw = localValues[cellKey(card.id, month)]?.trim() ?? "";
+                        return raw ? parseMoneyInputToCents(raw) : 0;
+                      })();
+                  const prevCents = prevMonth
+                    ? readOnly
+                      ? values[cellKey(card.id, prevMonth)] ?? 0
+                      : (() => {
+                          const raw = localValues[cellKey(card.id, prevMonth)]?.trim() ?? "";
+                          return raw ? parseMoneyInputToCents(raw) : 0;
+                        })()
+                    : 0;
+                  const evolution = prevMonth
+                    ? formatEvolutionPercent(currentCents, prevCents)
+                    : null;
+
+                  return (
+                    <TableCell key={month} className="p-1 text-right">
+                      {editable ? (
+                        <div className="flex flex-col items-end gap-0.5">
+                          <Input
+                            className="h-8 w-[96px] text-right text-sm"
+                            placeholder="—"
+                            disabled={pending}
+                            value={localValues[cellKey(card.id, month)] ?? ""}
+                            onChange={(e) => handleChange(card.id, month, e.target.value)}
+                          />
+                          {evolution ? (
+                            <span
+                              className={cn(
+                                "text-[10px] font-medium",
+                                evolutionColor(currentCents, prevCents)
+                              )}
+                            >
+                              {evolution}
+                            </span>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-end gap-0.5">
+                          <span className="text-sm">
+                            {cents ? formatCurrency(cents) : "—"}
+                          </span>
+                          {evolution ? (
+                            <span
+                              className={cn(
+                                "text-[10px] font-medium",
+                                evolutionColor(currentCents, prevCents)
+                              )}
+                            >
+                              {evolution}
+                            </span>
+                          ) : null}
+                        </div>
+                      )}
+                    </TableCell>
+                  );
+                })}
               </TableRow>
             ))}
             <TableRow className="font-semibold text-red-600">
               <TableCell className="sticky left-0 z-10 bg-background">Total</TableCell>
-              {months.map((month) => (
-                <TableCell key={month} className="text-right">
-                  {displayTotals[month] > 0
-                    ? formatCurrency(displayTotals[month])
-                    : "—"}
-                </TableCell>
-              ))}
+              {months.map((month, monthIndex) => {
+                const prevMonth = monthIndex > 0 ? months[monthIndex - 1] : null;
+                const current = displayTotals[month] ?? 0;
+                const previous = prevMonth ? (displayTotals[prevMonth] ?? 0) : 0;
+                const evolution = prevMonth
+                  ? formatEvolutionPercent(current, previous)
+                  : null;
+
+                return (
+                  <TableCell key={month} className="text-right">
+                    <div>{current > 0 ? formatCurrency(current) : "—"}</div>
+                    {evolution ? (
+                      <div
+                        className={cn(
+                          "text-[10px] font-medium",
+                          evolutionColor(current, previous)
+                        )}
+                      >
+                        {evolution}
+                      </div>
+                    ) : null}
+                  </TableCell>
+                );
+              })}
             </TableRow>
           </TableBody>
         </Table>

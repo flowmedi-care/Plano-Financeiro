@@ -116,7 +116,7 @@ export function generateScenariosReportPdf(params: {
   }
 
   doc.setFont("helvetica", "bold");
-  doc.text("Fatura por cartão (projeção)", 14, y);
+  doc.text("Fatura por cartão", 14, y);
   y += 4;
 
   const cardHead = ["Cartão", ...cardGrid.months.map((m) => m.slice(5) + "/" + m.slice(2, 4))];
@@ -134,6 +134,19 @@ export function generateScenariosReportPdf(params: {
       ...cardGrid.months.map((month) => {
         const total = cardGrid.totalsByMonth[month];
         return total > 0 ? formatCurrency(total) : "—";
+      }),
+    ]);
+
+    cardBody.push([
+      "Evolução",
+      ...cardGrid.months.map((month, index) => {
+        if (index === 0) return "—";
+        const current = cardGrid.totalsByMonth[month] ?? 0;
+        const previous = cardGrid.totalsByMonth[cardGrid.months[index - 1]] ?? 0;
+        if (previous <= 0 || current <= 0) return "—";
+        const pct = ((current - previous) / previous) * 100;
+        const sign = pct > 0 ? "+" : "";
+        return `${sign}${pct.toFixed(1)}%`;
       }),
     ]);
   }

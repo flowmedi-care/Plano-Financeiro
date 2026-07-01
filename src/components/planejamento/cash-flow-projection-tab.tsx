@@ -19,9 +19,12 @@ export function CashFlowProjectionTab({
   scenarios: ScenarioProjectionResult[];
   cardGrid: {
     months: string[];
+    futureMonths: string[];
     cards: CreditCard[];
     values: Record<string, number>;
     totalsByMonth: Record<string, number>;
+    focusMonth: string;
+    historyMonth: string;
   };
 }) {
   const firstMonth = monthInputs[0];
@@ -87,12 +90,14 @@ export function CashFlowProjectionTab({
         cards={cardGrid.cards}
         values={cardGrid.values}
         totalsByMonth={cardGrid.totalsByMonth}
-        readOnly
+        focusMonth={cardGrid.focusMonth}
+        historyMonth={cardGrid.historyMonth}
+        lockHistory
       />
 
       <div>
         <h2 className="mb-4 text-lg font-semibold">Cenários de despesas variáveis</h2>
-        <ScenarioTabs scenarios={scenarios} months={cardGrid.months} />
+        <ScenarioTabs scenarios={scenarios} months={cardGrid.futureMonths} />
       </div>
     </div>
   );

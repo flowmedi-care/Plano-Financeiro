@@ -28,6 +28,12 @@ export interface MonthProjection {
   isPositiveMonth: boolean;
 }
 
+export function previousReferenceMonth(referenceMonth: string): string {
+  const [year, month] = referenceMonth.split("-").map(Number);
+  if (month === 1) return toReferenceMonth(year - 1, 12);
+  return toReferenceMonth(year, month - 1);
+}
+
 export function buildMonthRange(
   startYear: number,
   startMonth: number,
